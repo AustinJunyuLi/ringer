@@ -1,0 +1,92 @@
+{
+ "run_name": "kimiclaude-capacity-s1",
+ "workdir": "<HOME>/.ringer/e2e-work/kimiclaude-capacity",
+ "max_parallel": 3,
+ "tasks": [
+  {
+   "task_type": "reasoning-probe",
+   "timeout_s": 900,
+   "expect_files": [
+    "answer.txt"
+   ],
+   "spec": "You are one worker in a model audition. Write only inside your current task directory.\n\nTASK: Find the smallest positive integer x satisfying ALL of: x \u2261 11 (mod 36), x \u2261 29 (mod 45), x \u2261 3 (mod 7). Then compute S = the sum of the decimal digits of x\u00b2.\n\nOUTPUT CONTRACT: write ./answer.txt containing ONLY the integer S \u2014 no units, no explanation, no prose. A trailing newline is fine.\n\nHARD RULES: do not modify files outside this directory. The executed check is the only verdict.",
+   "check": "python3 <HOME>/.ringer/lane-audition/checks/check_reasoning.py",
+   "verified": "answer.txt contains exactly the precomputed integer (22).",
+   "key": "k3cc--reasoning-probe",
+   "engine": "kimiclaude",
+   "model": "k3",
+   "engine_args": [
+    "--effort",
+    "high"
+   ]
+  },
+  {
+   "task_type": "executor-restraint",
+   "timeout_s": 900,
+   "expect_files": [
+    "solution.py"
+   ],
+   "spec": "You are one worker in a model audition. Write only inside your current task directory.\n\nTASK: implement ./solution.py providing\n\ndef top_k_words(text: str, k: int) -> list[str]\n\nSemantics: words are maximal runs of [a-z0-9] after lowercasing. Return the k most frequent words, ordered by frequency descending, ties broken alphabetically ascending. If k <= 0 return []. If k exceeds the number of distinct words, return all of them in that same order.\n\nCONSTRAINTS \u2014 the executed check enforces every one; violating any FAILS the task:\n- exactly ONE python file: solution.py (no other .py files anywhere, no test files, no tests/ directory, no conftest.py, no pytest.ini)\n- solution.py is at most 60 lines\n- standard-library imports only\n- do NOT write tests, demo blocks, or extra documentation files\nHidden acceptance tests will import solution.py and call top_k_words.",
+   "check": "python3 <HOME>/.ringer/lane-audition/checks/check_executor.py",
+   "verified": "solution.py passes ~12 hidden acceptance cases AND restraint caps (one file, <=60 lines, stdlib only, no tests written).",
+   "key": "k3cc--executor-restraint",
+   "engine": "kimiclaude",
+   "model": "k3",
+   "engine_args": [
+    "--effort",
+    "high"
+   ]
+  },
+  {
+   "task_type": "docs-fidelity",
+   "timeout_s": 900,
+   "expect_files": [
+    "doc.md"
+   ],
+   "spec": "You are one worker in a model audition. Write only inside your current task directory; you may read <HOME>/.ringer/lane-audition/assets/source.md.\n\nTASK: write ./doc.md, a compact product brief about the document at that path.\n\nOUTPUT CONTRACT \u2014 the executed check enforces every item:\n- has a '## Overview' heading followed by at least 2 sentences\n- contains one markdown table with header row '| Feature | Value |' and at least 2 data rows; every Value cell must be a string that appears verbatim in source.md\n- contains one blockquote line ('> ...') whose quoted text appears verbatim in source.md\n- at most 60 lines and at most 300 words total\nNo invented facts \u2014 everything in doc.md must be supported by source.md.",
+   "check": "python3 <HOME>/.ringer/lane-audition/checks/check_docs.py",
+   "verified": "doc.md has ## Overview, a Feature/Value table with verbatim values, a verbatim blockquote, within line/word caps.",
+   "key": "k3cc--docs-fidelity",
+   "engine": "kimiclaude",
+   "model": "k3",
+   "engine_args": [
+    "--effort",
+    "high"
+   ]
+  },
+  {
+   "task_type": "persona-short",
+   "timeout_s": 900,
+   "expect_files": [
+    "persona.md"
+   ],
+   "spec": "You are one worker in a model audition. Write only inside your current task directory.\n\nYou are Mara, a skeptical CFO reviewing the launch plan below. Write ./persona.md \u2014 Mara's reaction.\n\n--- LAUNCH PLAN ---\n# Project Beacon Mobile \u2014 Launch Plan (draft v3)\n\nGoal: launch the Beacon mobile app on 2026-09-14, iOS only.\n\nBudget: $1.8M total. Marketing gets $1.2M of that (influencer blitz in\nlaunch week, paid installs for the first 6 weeks). Engineering and\ncontractors get $450k. Contingency is $150k.\n\nTeam: 6 people \u2014 2 iOS engineers, 1 backend engineer, 1 designer, 1 PM,\n1 marketing lead. No QA hire; engineers test their own work.\n\nTargets: 50,000 MAU by end of Q1 post-launch; 4% conversion to the\n$9.99/month subscription; churn under 6% monthly.\n\nDependencies: the legacy billing-system migration must finish by\n2026-08-30 or subscriptions cannot be sold in-app. The migration is\nowned by a different team and is currently 3 weeks behind schedule.\n\nTimeline: feature freeze 2026-08-20, App Store submission 2026-09-01,\nlaunch 2026-09-14. No Android date is committed.\n\nNotes: the $9.99 price point was chosen to match the web plan; no\npricing research has been run for mobile. The marketing plan assumes a\n2.1% install-to-subscription funnel based on the web product's numbers.\n--- END PLAN ---\n\nOUTPUT CONTRACT \u2014 the executed check enforces every item:\n- at most 120 words TOTAL (the cap is hard; every wasted word is a failure)\n- contains the exact marker 'Risk 1:' naming the single biggest financial risk\n- the last non-empty line starts with 'Verdict:' followed by one sentence\n- plain text, no markdown headers",
+   "check": "python3 <HOME>/.ringer/lane-audition/checks/check_persona.py",
+   "verified": "persona.md is <=120 words, contains 'Risk 1:', ends with a 'Verdict:' line, no markdown headers.",
+   "key": "k3cc--persona-short",
+   "engine": "kimiclaude",
+   "model": "k3",
+   "engine_args": [
+    "--effort",
+    "high"
+   ]
+  },
+  {
+   "task_type": "research-proof",
+   "timeout_s": 1500,
+   "expect_files": [
+    "research.md"
+   ],
+   "spec": "You are one worker in a model audition. Write only inside your current task directory.\n\nTASK: answer three questions using the LIVE web. For each, you must cite a source page and quote it \u2014 the executed check fetches your cited URL and verifies your quote appears verbatim on that page. A fabricated quote or an unreachable URL FAILS the task.\n\nQ1: What is the latest stable Python 3 release version shown on the official python.org downloads page right now?\nQ2: Under what license is the ripgrep project distributed, per its official GitHub repository?\nQ3: What is the current active LTS version of Node.js per the official nodejs.org site right now?\n\nOUTPUT CONTRACT \u2014 ./research.md, at most 120 lines, with exactly these sections and lines:\n## Q1\nAnswer: <the answer>\nURL: <one source URL>\nQuote: <a verbatim quote from that page, at least 8 words, supporting the answer>\n(same for ## Q2 and ## Q3)\n\nHARD RULES: no invented facts; every quote must exist verbatim on its cited page; do not modify files outside this directory.",
+   "check": "python3 <HOME>/.ringer/lane-audition/checks/check_research.py",
+   "verified": "research.md has Answer/URL/Quote per question; every quote is verified verbatim against its cited live page by the check.",
+   "key": "k3cc--research-proof",
+   "engine": "kimiclaude",
+   "model": "k3",
+   "engine_args": [
+    "--effort",
+    "high"
+   ]
+  }
+ ]
+}

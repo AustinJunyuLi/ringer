@@ -1,0 +1,18 @@
+#!/bin/sh
+# claude-kimi: Claude Code harness pointed at Kimi's Anthropic-compatible
+# coding endpoint (membership plan). THE k3 worker lane since 2026-07-22 —
+# kimi-code CLI is boss-only, never a worker. Key from Kimi Code Console, 0600.
+# k3 ONLY — kimi-for-coding[-highspeed] on this endpoint are K2.7 (banned).
+export ANTHROPIC_BASE_URL="https://api.kimi.com/coding/"
+# Isolated config dir, same rationale as claude-qwen: keeps the main
+# ~/.claude OAuth session from shadowing worker auth, and worker state
+# out of the live config.
+export CLAUDE_CONFIG_DIR="$HOME/.claude-kimi-config"
+export ANTHROPIC_API_KEY="$(cat "$HOME/.kimi-code/claude-code-key")"
+unset ANTHROPIC_AUTH_TOKEN
+# The endpoint silently aliases unknown model slugs (verified: a haiku slug
+# returns 200) — likely to kimi-for-coding = K2.7, which is banned. Pin
+# Claude Code's internal small-model calls to k3 so NO traffic leaves it.
+export ANTHROPIC_SMALL_FAST_MODEL="k3"
+# Uses claude from PATH; set an absolute path here if it's not on PATH.
+exec claude "$@"

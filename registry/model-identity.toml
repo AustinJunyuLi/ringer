@@ -1,0 +1,258 @@
+# Model identity registry — resolves (engine, manifest model field) into the
+# display taxonomy: Model / Lab / Harness / Access. This is what the scoreboard and
+# Ringside show, and what keeps engine names (codex) from masquerading as
+# model names.
+#
+# confidence: "verified" requires a cited source (see source field);
+# "unverified" entries are best current knowledge awaiting the capability
+# research pass. Update via PR — this file is loaded into the local read DB.
+
+[engines.codex]
+harness = "Codex CLI"
+access = "OAuth plan"
+default_model_key = "gpt-5.5"
+
+[engines.codex.models."gpt-5.5"]
+display = "GPT-5.5"
+lab = "OpenAI"
+confidence = "verified"     # snapshot gpt-5.5-2026-04-23, Codex CLI default; see capability file
+source = "https://developers.openai.com/codex/models"
+last_verified = 2026-07-10
+
+[engines.codex.models."gpt-5.6-sol"]
+display = "GPT-5.6 Sol"
+lab = "OpenAI"
+confidence = "verified"
+source = "https://developers.openai.com/codex/models"
+last_verified = 2026-07-10
+
+[engines.codex.models."gpt-5.6-luna"]
+display = "GPT-5.6 Luna"
+lab = "OpenAI"
+confidence = "verified"
+source = "https://developers.openai.com/codex/models"
+last_verified = 2026-07-10
+
+[engines.codex.models."gpt-5.6-terra"]
+display = "GPT-5.6 Terra"
+lab = "OpenAI"
+confidence = "verified"
+source = "https://developers.openai.com/codex/models"
+last_verified = 2026-07-10
+
+[engines.grok]
+harness = "Grok Build CLI"
+access = "OAuth plan"
+default_model_key = "grok-build"
+
+[engines.grok.models."grok-build"]
+# "Grok Build" is the HARNESS (the CLI product), never a model name. The CLI
+# serves exactly two models: Grok 4.5 (xAI) and Composer 2.5 (Cursor). The
+# 'grok-build' engine default resolves to Grok 4.5. An earlier entry here
+# wrongly recorded "Grok Build 0.1" as a model — do not reintroduce it.
+display = "Grok 4.5"
+lab = "xAI"
+confidence = "verified"     # operator-confirmed (Jon, 2026-07-10): Grok Build CLI serves Grok 4.5 + Composer 2.5
+source = "https://docs.x.ai/developers/release-notes"
+last_verified = 2026-07-10
+noncanonical_slugs = ["opencode:openrouter/x-ai/grok-4.5"]
+
+[engines.grok.models."grok-composer-2.5-fast"]
+display = "Composer 2.5 Fast"
+lab = "Cursor (Anysphere)"
+confidence = "verified"     # Cursor (Anysphere) model, served through xAI's Grok Build CLI in our setup
+source = "https://cursor.com/blog/composer-2-5"
+last_verified = 2026-07-10
+
+[engines.opencode]
+harness = "OpenCode"
+access = "OpenRouter API"
+# model key = the manifest "model" slug; entries below map slugs to display
+# names. Unlisted slugs are marked unregistered and derive a display name;
+# their complete raw value appears only in scoreboard diagnostics until verified.
+
+[engines.opencode.models."openrouter/z-ai/glm-5.2"]
+display = "GLM 5.2"
+lab = "Z.ai (Zhipu AI)"
+confidence = "verified"
+source = "manifest model field; OpenRouter slug z-ai/glm-5.2"
+last_verified = 2026-07-10
+
+[engines.opencode.models."openrouter/moonshotai/kimi-k2.7-code"]
+display = "Kimi K2.7 Code"
+lab = "Moonshot AI"
+confidence = "verified"
+source = "manifest model field; OpenRouter slug moonshotai/kimi-k2.7-code"
+last_verified = 2026-07-10
+
+[engines.opencode.models."openrouter/nvidia/nemotron-3-super-120b-a12b:free"]
+display = "Nemotron 3 Super 120B (free)"
+lab = "NVIDIA"
+confidence = "verified"
+source = "manifest model field; OpenRouter slug nvidia/nemotron-3-super-120b-a12b:free"
+last_verified = 2026-07-10
+
+[engines.opencode.models."openrouter/meta-llama/llama-3.3-70b-instruct:free"]
+display = "Llama 3.3 70B Instruct (free)"
+lab = "Meta"
+confidence = "verified"
+source = "manifest model field; OpenRouter slug meta-llama/llama-3.3-70b-instruct:free"
+last_verified = 2026-07-10
+
+# ── Local engines (this machine, 2026-07-20) — not upstreamable ──────────
+
+[engines.kimi]
+harness = "Kimi Code CLI"
+access = "OAuth plan"
+default_model_key = "kimi-code/k3"
+
+[engines.kimi.models."kimi-code/k3"]
+display = "Kimi K3"
+lab = "Moonshot AI"
+confidence = "verified"
+source = "https://www.kimi.com/code"
+last_verified = 2026-07-20
+
+# Alias row: one failed run used bare "k3" before the alias was corrected to
+# "kimi-code/k3". Same trained artifact.
+[engines.kimi.models."k3"]
+display = "Kimi K3"
+lab = "Moonshot AI"
+confidence = "verified"
+source = "https://www.kimi.com/code"
+last_verified = 2026-07-20
+
+[engines.qwen]
+harness = "omp"
+access = "ModelStudio token plan"
+default_model_key = "qwen-token-plan/qwen3.8-max-preview"
+
+[engines.qwen.models."qwen-token-plan/qwen3.8-max-preview"]
+display = "Qwen 3.8 Max Preview"
+lab = "Alibaba (Qwen)"
+confidence = "verified"
+source = "https://qwen.ai"
+last_verified = 2026-07-20
+
+[engines.qwencode]
+harness = "Qwen Code CLI"
+access = "ModelStudio token plan"
+default_model_key = "qwen3.8-max-preview"
+# Slugs come from ~/.qwen/settings.json modelProviders (ModelStudio Token
+# Plan endpoint). Third-party models (GLM, DeepSeek, Kimi, MiniMax) are
+# served by ModelStudio under their own lineage-bearing slugs.
+
+[engines.qwencode.models."qwen3.8-max-preview"]
+display = "Qwen 3.8 Max Preview"
+lab = "Alibaba (Qwen)"
+confidence = "verified"
+source = "https://www.alibabacloud.com/help/en/model-studio/models"
+last_verified = 2026-07-21
+
+[engines.qwencode.models."qwen3.7-plus"]
+display = "Qwen 3.7 Plus"
+lab = "Alibaba (Qwen)"
+confidence = "verified"
+source = "https://www.alibabacloud.com/help/en/model-studio/models"
+last_verified = 2026-07-21
+
+[engines.qwencode.models."qwen3.6-flash"]
+display = "Qwen 3.6 Flash"
+lab = "Alibaba (Qwen)"
+confidence = "verified"
+source = "https://www.alibabacloud.com/help/en/model-studio/models"
+last_verified = 2026-07-21
+
+[engines.qwencode.models."glm-5.2"]
+display = "GLM 5.2"
+lab = "Z.ai (Zhipu AI)"
+confidence = "verified"
+source = "ModelStudio Token Plan catalog; same artifact family as OpenRouter z-ai/glm-5.2"
+last_verified = 2026-07-21
+
+[engines.qwencode.models."deepseek-v4-pro"]
+display = "DeepSeek V4 Pro"
+lab = "DeepSeek"
+confidence = "verified"
+source = "https://www.alibabacloud.com/help/en/model-studio/models"
+last_verified = 2026-07-21
+
+[engines.qwencode.models."kimi-k2.7-code"]
+display = "Kimi K2.7 Code"
+lab = "Moonshot AI"
+confidence = "verified"
+source = "ModelStudio Token Plan catalog; same artifact family as OpenRouter moonshotai/kimi-k2.7-code"
+last_verified = 2026-07-21
+
+[engines.qwencode.models."MiniMax-M2.5"]
+display = "MiniMax M2.5"
+lab = "MiniMax"
+confidence = "verified"
+source = "https://www.alibabacloud.com/help/en/model-studio/models"
+last_verified = 2026-07-21
+
+# Claude Code CLI lane (added 2026-07-21, K3-boss fleet). Aliases verified
+# against `claude --help` v2.1.216: opus/sonnet/fable aliases accepted;
+# --effort low|medium|high|xhigh|max. Aliases FLOAT over underlying
+# snapshots — rows are alias-exact, not snapshot-exact.
+[engines.claude]
+harness = "Claude Code CLI"
+access = "OAuth plan"
+default_model_key = "sonnet"
+
+[engines.claude.models."sonnet"]
+display = "Claude Sonnet"
+lab = "Anthropic"
+confidence = "unverified"     # alias floats over snapshots; verified working headless 2026-07-21
+source = "claude --help v2.1.216 (local)"
+last_verified = 2026-07-21
+
+[engines.claude.models."opus"]
+display = "Claude Opus"
+lab = "Anthropic"
+confidence = "unverified"     # alias floats; verified headless incl. --effort max 2026-07-21
+source = "claude --help v2.1.216 (local)"
+last_verified = 2026-07-21
+
+[engines.claude.models."claude-fable-5"]
+display = "Claude Fable 5"
+lab = "Anthropic"
+confidence = "unverified"     # red-phone lane; verified headless 2026-07-21
+source = "claude --help v2.1.216 (local); user settings default"
+last_verified = 2026-07-21
+
+# Alias row: "fable" resolves to the same artifact as claude-fable-5.
+[engines.claude.models."fable"]
+display = "Claude Fable 5"
+lab = "Anthropic"
+confidence = "unverified"
+source = "claude --help v2.1.216 (local)"
+last_verified = 2026-07-21
+
+# Alias of k3 pinned to max thinking effort (added 2026-07-21). Same trained
+# artifact as kimi-code/k3 — display kept distinct ("Kimi K3 Max") so
+# scoreboard rows for the two effort cells don't merge; the kimi harness has
+# no effort flag, so the alias is the effort carrier.
+[engines.kimi.models."kimi-code/k3max"]
+display = "Kimi K3 Max"
+lab = "Moonshot AI"
+confidence = "verified"
+source = "https://www.kimi.com/code"
+last_verified = 2026-07-21
+
+# [engines.kimiqwen] — Qwen routed through the Kimi Code harness (added
+# 2026-07-22, user decision): same trained artifact as the qwenclaude/qwencode
+# lanes, different harness+route. Kimi Code provider "qwen-token-plan"
+# (OpenAI-compatible Token Plan endpoint; credential shadowing ruled out by
+# header capture 2026-07-22).
+[engines.kimiqwen]
+harness = "Kimi Code CLI"
+access = "ModelStudio token plan"
+default_model_key = "qwen-token-plan/qwen3.8-max-preview"
+
+[engines.kimiqwen.models."qwen-token-plan/qwen3.8-max-preview"]
+display = "Qwen 3.8 Max Preview"
+lab = "Alibaba (Qwen)"
+confidence = "verified"       # live probe through kimi harness 2026-07-22 (8.5s reply, tool use OK)
+source = "local probe via kimi -m qwen-token-plan/qwen3.8-max-preview"
+last_verified = 2026-07-22

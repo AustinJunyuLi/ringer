@@ -1,0 +1,16 @@
+#!/bin/sh
+# claude-qwen: Claude Code harness pointed at the ModelStudio Token Plan
+# Anthropic-compatible endpoint (flat-rate qwen lane). Key stays in
+# ~/.qwen/settings.json — single source of truth.
+export ANTHROPIC_BASE_URL="https://token-plan.cn-beijing.maas.aliyuncs.com/apps/anthropic"
+# Isolated config dir: the main ~/.claude is OAuth-logged-in, and that keychain
+# token silently SHADOWS ANTHROPIC_AUTH_TOKEN (verified 2026-07-22 via local
+# header capture: Bearer sk-ant-oat01-... reached the qwen endpoint -> 401).
+# A config dir with no OAuth session makes the env token win.
+export CLAUDE_CONFIG_DIR="$HOME/.claude-qwen-config"
+export ANTHROPIC_AUTH_TOKEN="$(python3 -c "import json;print(json.load(open('$HOME/.qwen/settings.json'))['env']['BAILIAN_TOKEN_PLAN_API_KEY'])")"
+# Endpoint serves no haiku; route Claude Code's internal small-model calls to the plan's flash tier.
+export ANTHROPIC_SMALL_FAST_MODEL="qwen3.6-flash"
+unset ANTHROPIC_API_KEY
+# Uses claude from PATH; set an absolute path here if it's not on PATH.
+exec claude "$@"
