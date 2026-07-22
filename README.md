@@ -130,16 +130,16 @@ The binding routing table (canonical version in
 | Task shape | Primary cell | Backup |
 |---|---|---|
 | Math / quant verification | **Sol-max** (codex) | Terra-xhigh |
-| Substantial code feature | **Sol-high** (codex) | Sol-xhigh (deliberate escalation only) |
-| Code fix / hotfix / minimal diff | **K3**, effort adaptive | Terra-xhigh, Sonnet |
+| Substantial code feature | **K3**, effort adaptive — *probation* (unsupervised dispatches cap at effort high) | Sol-high (standing backup during probation) |
+| Code fix / hotfix / minimal diff | **Terra-xhigh** (codex) | K3, Sonnet |
 | Small/medium executor & build | **Sonnet**, effort adaptive | K3, Terra-xhigh |
-| Architecture / design review | **Opus**, effort adaptive | K3 second opinion (usually earns max) |
+| Architecture / design review | **K3**, effort adaptive | Opus second opinion (usually earns max) |
 | Taste-gated (UI, copy, user-facing docs) | **K3**, effort adaptive | Sonnet |
-| Exploratory / live-web research | **Opus**, effort adaptive | K3 |
-| Bounded research (repo lookup, DB scrape) | **Qwen** † | K3 |
+| Exploratory / live-web research | **Opus or Sonnet** — the boss judges model *and* effort per task | K3 |
+| Bounded research (repo lookup, DB scrape) | **Sonnet or Opus** — the boss judges model *and* effort per task | K3; Qwen (scheduled background/batch only) |
 | Mechanical / bulk transforms, probes, smokes | **Qwen** † | Sonnet, Terra-xhigh |
-| Test-hardening | **Qwen** † | Sol-high |
-| Diff review — non-blocking, small diffs | **Qwen** † or cheapest capable (same-family review allowed) | Sonnet, K3, Terra-xhigh |
+| Test-hardening | **Sol-high** (codex) | Qwen (background batches only) |
+| Diff review — non-blocking, small diffs | **Qwen** † **or Terra-xhigh**, in rotation (cheapest capable; same-family review allowed) | Sonnet, K3 |
 | Diff review — gating (blocks a merge or step) | **Sonnet**, effort adaptive | K3, Terra-xhigh |
 | Gate on irreversible / high-stakes actions (public publish, prod deploy, security-touching) | **Opus**, effort adaptive (usually earns max) | — |
 | Consult (engineering second opinion) | **Terra-high** | — |
@@ -157,13 +157,52 @@ latency scales hard with input, and slow *is* failure on a gate.
 
 **Diff review is tiered by what a wrong verdict costs, not by diff size.**
 Non-blocking small diffs go to the cheapest capable cell — on correctness
-these lanes are interchangeable at ordinary review sizes. A review that
+these lanes are interchangeable at ordinary review sizes — with qwen and
+Terra-xhigh **rotating**: running both keeps the codex lane's scoreboard
+rows live instead of fossilizing on a single pick. A review that
 *blocks* a merge or step goes to Sonnet, because a gate's latency is part of
 its quality. A gate on an **irreversible or high-stakes action** — a public
 publish, a production deploy, anything security-touching — goes to Opus at
 whatever effort the task earns, because wrong-and-merged costs more than
 slow-and-right. The escalation trigger is always "what does it cost if the
 reviewer is wrong."
+
+**Why the feature lane flipped to K3 — and why the flip is staged.** K3's
+parsimony is a virtue in feature coding: it writes the diff the spec asks
+for and stops. But every measurement of K3 through the Claude harness so
+far is on *small* tasks — the lane has never carried a multi-minute build.
+So the previous owner, Sol-high, remains the **standing backup** until K3
+accumulates 3+ feature passes first-try at ≥ 0.67 on the promotion ladder.
+And the K3-at-max build ban (below) binds directly here: unsupervised
+feature dispatches cap at **effort high**; max only with the boss actively
+reviewing mid-task.
+
+**Fixes moved to Terra-xhigh** for two reasons that compound: Terra was the
+proven backup on exactly this lane, and moving fixes off K3 frees that
+subscription's capacity for the feature lane that K3 now carries.
+
+**Architecture review swapped to K3, with Opus as the second opinion.**
+Both lanes had clean audition sheets, so the assignment was interchangeable
+on evidence — and the swap concentrates the Kimi plan on low-volume,
+high-value work while Opus's slower, meticulous style is spent where a
+second reading actually changes outcomes.
+
+**The research lanes are Claude-family owned.** Exploratory and bounded
+research both route to Opus or Sonnet, with the boss judging model *and*
+effort per task — Opus for hard or open-ended questions and lookups whose
+answer feeds a decision, Sonnet for lighter sweeps. Bounded research leaves
+qwen entirely except scheduled background/batch jobs, for the same reason
+the scope rule exists: a repo lookup or DB scrape is usually *on* the
+critical path — something is blocked waiting on the answer — and on the
+critical path, slow *is* failure.
+
+**Test-hardening moved to Sol-high.** Honest rationale: the evidence
+behind qwen's habit of writing unrequested tests was gathered under a
+different harness and was never re-verified against the current one — the
+concern is **retired, not disproven**. What remains true is the scope rule:
+test-hardening is usually gating, and qwen is one full-thinking cell with
+no effort knob. Qwen keeps background test batches, where latency doesn't
+matter and its throughput is an asset.
 
 **The Qwen scope rule** († on every qwen row above) exists because of how
 qwen fails. It has never failed a review on correctness through the Claude
@@ -202,7 +241,15 @@ Budget by **subscription caps and latency**, not per-token price: every
 worker lane is flat-rate within a plan cap, so routing decisions are about
 which cap has headroom and which cell is fast enough — not imagined
 capability gaps. Every lane clears the capability floor at ordinary task
-sizes; the scoreboard proved that.
+sizes; the scoreboard proved that. The current cap flow: the **OpenAI plan**
+carries five lanes — math, fixes, test-hardening, consult, and a share of
+the non-blocking review rotation. The **Kimi plan** carries features,
+architecture review, and taste — low-volume, high-value work, the right
+shape for that cap. The **Claude plan** is the heaviest — executor, both
+research lanes, gating reviews, and the premium steady lane — and is the
+cap to watch first. **Qwen** is narrowed to bulk/mechanical work, its share
+of the review rotation, and background/batch jobs, all under the scope rule
+above.
 
 ## Claude Code as a universal harness
 
