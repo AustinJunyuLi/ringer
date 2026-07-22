@@ -1,12 +1,12 @@
 # fable-ringer
 
-**Austin's Fable-bossed configuration of Ringer** — a verified-swarm
-orchestrator where one expensive model (Claude Fable 5) plans, routes, and
-reviews, and a fleet of cheaper, cross-family worker models does all the
-typing — with every single task graded by an *executed* check, not by what
-the worker claims it did.
+**A Fable-bossed configuration of Ringer** — a verified-swarm orchestrator
+where one expensive model (Claude Fable 5) plans, routes, and reviews, and a
+fleet of cheaper, cross-family worker models does all the typing — with every
+single task graded by an *executed* check, not by what the worker claims it
+did.
 
-This repository is the altered upstream tool plus Austin's personal operating
+This repository is the altered upstream tool plus an operator's configuration
 layer (routing doctrine, wrapper scripts, probes, skill). The focus of this
 README is **how the system is set up and operated**; the upstream project it
 is built on is credited at the end.
@@ -20,7 +20,7 @@ is built on is credited at the end.
 - [The only verdict: executed checks](#the-only-verdict-executed-checks)
 - [Cell-based routing](#cell-based-routing)
 - [Claude Code as a universal harness](#claude-code-as-a-universal-harness)
-- [Operational lessons (learned the hard way)](#operational-lessons-learned-the-hard-way)
+- [Testing and upgrading your own lanes](#testing-and-upgrading-your-own-lanes)
 - [The scoreboard and the evidence loop](#the-scoreboard-and-the-evidence-loop)
 - [Install and setup](#install-and-setup)
 - [Repository layout](#repository-layout)
@@ -31,8 +31,8 @@ is built on is credited at the end.
 
 ## The architecture in one paragraph
 
-A human (Austin) talks to **Claude Fable 5**, the sole boss. Fable decomposes
-the job into a **manifest** of tasks, writes a self-contained spec and an
+A human operator talks to **Claude Fable 5**, the boss. Fable decomposes the
+job into a **manifest** of tasks, writes a self-contained spec and an
 executable check for each, and dispatches them to **worker models from four
 different families** — OpenAI's GPT-5.6 (Sol/Terra) through the Codex CLI,
 Moonshot's Kimi K3 and Alibaba's Qwen through the Claude Code harness pointed
@@ -131,17 +131,57 @@ The binding routing table (canonical version in
 |---|---|---|
 | Math / quant verification | **Sol-max** (codex) | Terra-xhigh |
 | Substantial code feature | **Sol-high** (codex) | Sol-xhigh (deliberate escalation only) |
-| Code fix / hotfix / minimal diff | **K3**, effort adaptive (kimiclaude) | Terra-xhigh, Sonnet |
+| Code fix / hotfix / minimal diff | **K3**, effort adaptive | Terra-xhigh, Sonnet |
 | Small/medium executor & build | **Sonnet**, effort adaptive | K3, Terra-xhigh |
 | Architecture / design review | **Opus**, effort adaptive | K3 second opinion (usually earns max) |
 | Taste-gated (UI, copy, user-facing docs) | **K3**, effort adaptive | Sonnet |
 | Exploratory / live-web research | **Opus**, effort adaptive | K3 |
-| Bounded research (repo lookup, DB scrape) | **Qwen** (qwenclaude) | K3 |
-| Mechanical / bulk transforms, probes, smokes | **Qwen** (qwenclaude) | Sonnet, Terra-xhigh |
-| Test-hardening | **Qwen** | Sol-high |
-| Diff review | Cheapest capable cell: qwen / sonnet / k3 / terra-xhigh | — |
+| Bounded research (repo lookup, DB scrape) | **Qwen** † | K3 |
+| Mechanical / bulk transforms, probes, smokes | **Qwen** † | Sonnet, Terra-xhigh |
+| Test-hardening | **Qwen** † | Sol-high |
+| Diff review — non-blocking, small diffs | **Qwen** † or cheapest capable (same-family review allowed) | Sonnet, K3, Terra-xhigh |
+| Diff review — gating (blocks a merge or step) | **Sonnet**, effort adaptive | K3, Terra-xhigh |
+| Gate on irreversible / high-stakes actions (public publish, prod deploy, security-touching) | **Opus**, effort adaptive (usually earns max) | — |
 | Consult (engineering second opinion) | **Terra-high** | — |
 | Premium steady lane (must-not-wobble) | **Opus** (usually earns max) | — |
+
+† **Qwen scope rule** — every qwen-primary row above is conditional: qwen
+takes a task only if it is **both bounded** (single deliverable, expected
+wallclock ≤ ~15 min, no whole-repo sweeps or 1000+-line-input grinds) **and
+off the critical path** (nothing and nobody blocked waiting on it). Anything
+bigger **or** gating routes to Sonnet/K3/Opus per the table. The one
+deliberate exception: scheduled background/batch jobs may use qwen at any
+size with generous timeouts. Rationale: qwen's failure mode is **latency,
+never quality** — it is one full-thinking cell with no effort knob, so
+latency scales hard with input, and slow *is* failure on a gate.
+
+**Diff review is tiered by what a wrong verdict costs, not by diff size.**
+Non-blocking small diffs go to the cheapest capable cell — on correctness
+these lanes are interchangeable at ordinary review sizes. A review that
+*blocks* a merge or step goes to Sonnet, because a gate's latency is part of
+its quality. A gate on an **irreversible or high-stakes action** — a public
+publish, a production deploy, anything security-touching — goes to Opus at
+whatever effort the task earns, because wrong-and-merged costs more than
+slow-and-right. The escalation trigger is always "what does it cost if the
+reviewer is wrong."
+
+**The Qwen scope rule** († on every qwen row above) exists because of how
+qwen fails. It has never failed a review on correctness through the Claude
+harness — quality is not the risk. The risk is that it is exactly one
+full-thinking cell with no effort knob: latency scales hard with input size,
+and on anything gating, slow *is* failure. So the rule is two conjunctive
+tests — bounded **and** off the critical path — with the background/batch
+exception, and anything bigger or gating routes up to Sonnet/K3/Opus.
+
+**Harness follows the boss.** A fleet can have more than one boss — e.g. a
+K3 boss alongside the Fable boss — and each boss routes the K3 and qwen
+worker lanes through its own harness: the **Kimi CLI engines** for a K3 boss,
+the **`claude-kimi` / `claude-qwen` wrappers** (below) for the Fable boss.
+The adaptive `--effort` rule applies to the Claude-harness lanes; through the
+Kimi CLI, K3's effort is selected by **model alias** instead (the alias is
+the effort carrier — there is no `--effort` flag). Same workers, same
+doctrine, different wire — and the scoreboard attributes results per engine,
+so harness differences stay visible in the evidence.
 
 **Hard exclusions** (as load-bearing as the assignments, each backed by a
 documented incident):
@@ -204,49 +244,81 @@ Two endpoints are wired this way:
   the problem, never the model.
 - The Kimi CLI was fine but slower: on identical tasks with identical
   checks, `claude-kimi` matched or beat it on all five, with the
-  live-research task **4.8× faster** (256s vs 1224s).
+  live-research task **4.8× faster** (256s vs 1224s). Both harnesses remain
+  in service — the Kimi CLI carries K3-bossed work, the wrappers carry
+  Fable-bossed work (see "Harness follows the boss" above).
 - Bonus diagnostic capability: the isolated config dir keeps full per-event
   session JSONL transcripts, which turned a "worker stalled" verdict into a
   "the orchestrator set the timeout too tight; transcript shows continuous
   work" correction.
 
-## Operational lessons (learned the hard way)
+## Testing and upgrading your own lanes
 
-These are the incidents behind the wrappers' exact shape. Each is documented
-with executed evidence in `docs/MODEL-NOTES.md`.
+The wrappers and routing table above are the *output* of a process. This
+section is the process itself: how to safely add a worker lane, or upgrade an
+existing one, on your own endpoints and subscriptions. Every step ends in an
+executed check — never in "it obviously works."
 
-1. **An OAuth keychain login silently shadows env-var auth tokens.**
-   `claude-qwen` started returning `401 Invalid API-key` on every call. The
-   key was fine. A local header capture showed the requests reaching the qwen
-   endpoint carrying `Authorization: Bearer sk-ant-oat01-…` — the *main*
-   Claude config's OAuth token, which outranks `ANTHROPIC_AUTH_TOKEN`. Fix:
-   each wrapper exports an **isolated `CLAUDE_CONFIG_DIR`** with no OAuth
-   session, so the env token wins. Corollary: a 401 through a wrapper harness
-   implicates the harness's credential precedence *before* the credential
-   itself.
+**1. Probe first — no lane carries real work on a handshake.** Before a new
+lane touches a real task, run a one-task Ringer probe with an executed check
+through it and require a pass. The manifests in `overlay/probes/` are the
+pattern: a small task, a self-contained spec, a check that verifies content.
+A lane that can't pass a probe can't be trusted with a queue, and a probe
+costs almost nothing to run.
 
-2. **Endpoints silently alias unknown model slugs.** The Kimi endpoint
-   returns HTTP 200 for *any* model slug — including Claude ones — and
-   serves *something*. Claude Code makes internal "small fast model" calls
-   (title generation, compaction), so unspecified traffic was being served by
-   an undisclosed default — likely a banned K2.7 slug. Fix: pin
-   **`ANTHROPIC_SMALL_FAST_MODEL`** to a sanctioned slug (`k3` on Kimi,
-   `qwen3.6-flash` on qwen) so *no* traffic leaves the approved model.
+**2. Screen for capacity with identical tasks and identical checks.** When a
+new lane is a candidate to displace an existing one, run the *same* screening
+tasks with the *same* checks through both, so the scoreboard rows are
+directly comparable — same spec, same check, same timeout. The displacement
+bar is **equal-or-faster with a clean sheet**: first-try passes everywhere,
+no retries, no stalls. Anything less and the incumbent keeps the lane.
 
-3. **Never trust an endpoint's echoed model name.** An Anthropic-compatible
-   endpoint that echoes back the model you requested is *not* confirming what
-   served the request. Verify at the byte level: capture the wire headers
-   (confirmed `x-api-key: sk-kimi-…` on the Kimi lane, `Bearer sk-sp-…` on
-   the qwen lane, zero `sk-ant-` leakage on either), or pin the slug.
-   Capture-or-pin, never assume.
+**3. Verify the effort knob empirically — never assume a flag maps through a
+third-party endpoint.** A/B the same task at low vs max effort against a
+ground truth you computed yourself (e.g. count primes up to N by sieve, then
+ask the lane at both efforts), and measure the actual thinking-token output
+at each setting. On one endpoint here, `--effort` produced measurably
+different thinking counts and correct answers at both settings — knob
+confirmed. On another, request sniffing showed the CLI sends the effort
+fields and the endpoint ignores them — one full-thinking cell, and routing
+was adjusted accordingly. The endpoint's documentation is a hypothesis; the
+A/B is the verdict.
 
-4. **Key rotation has a blast radius.** The same qwen key lives in two
-   config files; rotate in both or one lane 401s.
+**4. Verify auth at the wire.** Run a local header-capture server (a dozen
+lines of Python), point the wrapper at it, and confirm exactly which
+credential leaves the machine. The failure this catches: an OAuth-logged-in
+main Claude config **silently shadows env-var tokens** — requests go out
+carrying the main config's OAuth bearer instead of your lane key, and the
+endpoint 401s a perfectly good key. That is why each wrapper exports an
+**isolated `CLAUDE_CONFIG_DIR`** with no OAuth session, so the env token
+wins. Corollary for debugging: a 401 through a wrapper implicates the
+harness's credential *precedence* before the credential itself.
 
-5. **"Stall" verdicts require a transcript check first.** Two "hung" qwen
-   runs were continuously working (127–131 events, ~75 tool calls each) —
-   the orchestrator's timeout was just too tight for a 100+-turn task.
-   Heavy single-grind tasks now get 3600s+ or get split.
+**5. Pin every model path.** Some endpoints silently alias unknown model
+slugs — they return HTTP 200 for *anything*, echo your requested name back,
+and serve whatever they feel like. And the harness makes internal
+"small fast model" calls of its own (title generation, compaction), so
+unspecified traffic can be served by an undisclosed default. Pin
+**`ANTHROPIC_SMALL_FAST_MODEL`** to a sanctioned slug on that endpoint so
+*no* traffic leaves the approved model — and never trust an echoed model
+name as confirmation of what served the request. Capture-or-pin, never
+assume.
+
+**6. Operate like keys, timeouts, and promotions all have blast radius — they do.**
+   - **Rotate keys everywhere they live.** If the same key exists in two
+     config files, rotate both, or one lane starts 401ing the day you rotate
+     the other.
+   - **Check timeout verdicts against the session transcript before blaming
+     the model.** Two "hung" runs here turned out to be continuously working
+     (100+ events, dozens of tool calls each) — the orchestrator's timeout
+     was simply too tight for a 100+-turn grind. Heavy single-grind tasks
+     get generous timeouts or get split.
+   - **Advance lanes on the promotion ladder, and record demotions.** A lane
+     earns scope: **untested → probation → proven** (3+ tasks in a task type
+     with first-try ≥ 0.67). Proven lanes get bigger assignments and an
+     audition one rung up; repeated first-attempt failures end the audition,
+     and the demotion goes in the notes with the evidence, so the scoreboard
+     stays an honest memory instead of a highlight reel.
 
 ## The scoreboard and the evidence loop
 
@@ -274,8 +346,9 @@ honest:
 **Capacity screens** are how new lanes earn trust: the *identical* screening
 tasks with the *identical* checks run through the new engine, so rows are
 directly comparable across lanes. That's how `claude-kimi` displaced the
-Kimi CLI in one afternoon (5/5 first-try, equal-or-faster everywhere), and
-how the qwen lane's heavy-load behavior was validated post-incident.
+Kimi CLI for Fable-bossed work in one afternoon (5/5 first-try,
+equal-or-faster everywhere), and how the qwen lane's heavy-load behavior was
+validated post-incident.
 
 **The probe doctrine:** every new lane or model change goes through a
 passing Ringer probe with an executed check *before it carries real work*
@@ -337,7 +410,7 @@ fable-ringer/
 │   ├── UPSTREAM-README.md # The original project's README, preserved
 │   ├── MODEL-NOTES.md     # The evidence trail (dated, executed-check-only)
 │   └── …                  # Steering, taxonomy, screenshots
-├── overlay/               # Austin's personal layer (the point of this repo)
+├── overlay/               # The operator's configuration layer (the point of this repo)
 │   ├── bin/               #   claude-kimi, claude-qwen wrapper scripts
 │   ├── config/            #   config.toml.example (engine wiring)
 │   ├── rules/             #   model-routing.md — the canonical routing table
@@ -347,19 +420,19 @@ fable-ringer/
 └── README.md              # You are here
 ```
 
-Everything outside `overlay/` tracks the upstream tool (with Austin's
-alterations); everything inside `overlay/` is the configuration, doctrine,
-and evidence that make it *this* system.
+Everything outside `overlay/` tracks the upstream tool (with alterations);
+everything inside `overlay/` is the configuration, doctrine, and evidence
+that make it *this* system.
 
 ## A day in the life
 
-1. Austin describes a job. Fable writes a manifest: one task per checkable
-   unit, each with a self-contained spec, a routing cell, and an executable
-   check. `ringer.py lint` catches unverifiable checks, silent checks, file
-   ownership collisions, and underspecified specs before anything runs.
+1. The operator describes a job. Fable writes a manifest: one task per
+   checkable unit, each with a self-contained spec, a routing cell, and an
+   executable check. `ringer.py lint` catches unverifiable checks, silent
+   checks, file ownership collisions, and underspecified specs before
+   anything runs.
 2. `ringer.py run manifest.json --identity fable` — Ringside (the live
-   dashboard) comes up first so the human watches the swarm, not a silent
-   terminal.
+   dashboard) comes up first so you watch the swarm, not a silent terminal.
 3. Workers execute in parallel, each in its own task dir. Ringer runs every
    check; failures retry once with the check's failure output injected.
 4. Fable reads the run JSON, reads the raw logs of anything retried or
@@ -379,5 +452,5 @@ and evidence that make it *this* system.
 This repository redistributes the upstream code with alterations under that
 same license, with the Required Notice preserved in `LICENSE.md`. The
 boss/worker doctrine, the routing table, the wrapper scripts, and the
-operational evidence described in this README are Austin's layer on top —
-but the tool that makes any of it verifiable is Nate's.
+operational evidence described in this README are this repo's operating layer
+on top — but the tool that makes any of it verifiable is Nate's.
