@@ -15,10 +15,10 @@ description: >-
   debugging a failed run. SKIP only for: reading or searching files, git
   operations, a one-file few-line ONE-SHOT edit (once — a second pass is a
   loop: TRIGGER), authoring prose/specs/docs straight from your own context,
-  or pure conversation. OVERRIDE (user 2026-07-22, beats every trigger
+  or pure conversation. OVERRIDE (beats every trigger
   heuristic above): the user's routing words re-route THAT JOB ONLY —
   "workflow" / "native swarm" / "native workflow" → the native workflow
-  protocol in ~/.claude/rules/model-routing.md; "inline" → no fan-out at
+  protocol in your routing rules file; "inline" → no fan-out at
   all. For an overridden job: skill stays unloaded, no re-offering, no
   nudges. Ultracode active = a STANDING native declaration for the session:
   all orchestration runs native; ringer runs only on the explicit word
@@ -46,9 +46,9 @@ description: >-
    moment this skill loads for real work, before you write a single spec,
    put Ringside on the human's screen: `./ringer.py hud` (idempotent — if
    one is already up it says so and opens the page; runs also auto-start
-   it). Ringside is the PAGE at http://127.0.0.1:8787 (this machine's config
-sets `dashboard_port_base = 8787`; the README's 8700 is the public
-default) — NEVER launch the
+   it). Ringside is the PAGE at `http://127.0.0.1:<port>`, where the port
+   comes from `dashboard_port_base` in your config (the README's 8700 is
+   the public default) — NEVER launch the
    Ringside.app application (`open -a Ringside`); it is a parked prototype
    with a stale frontend. And never go dark: if your prep (research,
    check-writing, manifest drafting) will take more than ~30 seconds,
@@ -59,7 +59,7 @@ default) — NEVER launch the
    asks.
 
 Ringer runs manifest tasks in parallel across cheap CLI workers (codex,
-kimi, kimiclaude, claude — lanes wired in `~/.config/ringer/config.toml`; qwen lanes deleted 2026-07-24)
+kimi, kimiclaude, claude — lanes wired in `~/.config/ringer/config.toml`)
 and verifies every task by **executing a
 check command** — exit 0 is the only PASS. Failed tasks are retried once
 with the check's actual failure output injected into the retry prompt. You —
@@ -143,7 +143,7 @@ the check's failure output.
 - **Strict on substance, tolerant on format.** Checks that count exact
   headings, demand exact casing, or grep rigid phrasings fail honest work
   over formatting — and a wall of red format-failures reads as a broken
-  system, not a careful one (demo-night lesson). Verify what must be TRUE
+  system, not a careful one. Verify what must be TRUE
   (the file proves X, the code runs, the quote exists in the source), use
   case-insensitive and flexible matching for structure, and reserve hard
   failure for substance: missing evidence, fabricated content, code that
@@ -197,7 +197,7 @@ from THEIR evidence.** Before the FIRST run of a job: read what's wired up
 (`[engines.<name>]` blocks in `~/.config/ringer/config.toml`), run
 `./ringer.py models --task-type <this job's type>` for the local scoreboard,
 and read the binding routing table in
-`~/.claude/rules/model-routing.md` — the ONE canonical table (cell-based:
+your routing rules file — the ONE canonical table (cell-based:
 a cell is model × effort; never embed a copy here). Then ask the user which
 cell should do the typing — top 2–3 options with the NUMBERS in the pitch
 and a recommendation. Honor their pick via the per-task
@@ -231,10 +231,10 @@ the harness is what provides the sandbox, raw logs, token counts, and
 executed verification, so routing around it silently drops all four. Never
 clone an engine block or splice `-m` through `engine_args` to change
 models; that's what the `model` field is for, and a bakeoff is only real
-when the MANIFEST names each competitor (2026-07-06 lesson: an engine block
-with a hard-coded model ran one model under three competitors' names).
+when the MANIFEST names each competitor (an engine block
+with a hard-coded model will run one model under every competitor's name).
 
-Cell assignment comes from `~/.claude/rules/model-routing.md` (binding
+Cell assignment comes from your routing rules file (binding
 table + hard exclusions) grounded in the scoreboard; notes:
 
 - Small/flash-class models are the first to choke on long conversational or
@@ -247,7 +247,7 @@ table + hard exclusions) grounded in the scoreboard; notes:
   task_type): first_try_pass_rate is the routing signal; pass_rate includes
   retry rescues. Then read `docs/MODEL-NOTES.md` (in the ringer repo) for
   the judgment the numbers can't carry. Routing is grounded in performance,
-  not vibes (Jon directive 2026-07-06).
+  not vibes.
 - **"Show me the scoreboard" is one command.** When the human asks to see
   the model scoreboard, rankings, model costs, or "which models work best,"
   run `./ringer.py models --open` — it renders the full scoreboard (tiers,
@@ -260,19 +260,19 @@ table + hard exclusions) grounded in the scoreboard; notes:
   image-gen, docs, probe, bakeoff, ...). Untyped tasks bucket as (untyped)
   and teach the scoreboard nothing; lint nudges you when it's missing.
 
-## Worktrees-mode footguns (learned the hard way)
+## Worktrees-mode footguns
 
 Run-level `"worktrees": true` gives each task an isolated git worktree of
 `repo`, detached at HEAD. Three consequences:
 
-1. **Passing tasks get their worktree DELETED.** Deliverables must land
+1. **Passing tasks get their worktree REMOVED.** Deliverables must land
    outside the task worktree, or the check must export them first.
 2. **Worker commits die with the worktree.** Pattern that works: the worker
    leaves changes uncommitted; the check runs
    `git add -A && git diff --cached > <path-outside-worktree>.patch` and
    validates the patch. You apply and commit on your branch after review.
 3. **Logs survive** (they go to `<workdir>/logs/`), so post-mortems work
-   even on deleted worktrees.
+   even on removed worktrees.
 4. **Gitignored outputs silently vanish from patch exports.** `git add -A`
    cannot stage ignored files (build dirs like `dist/`), so a worker's edits
    there pass its checks, export an incomplete patch, and die with the

@@ -1,36 +1,17 @@
 #!/bin/sh
-# claude-kimi: Claude Code harness pointed at Kimi's Anthropic-compatible
-# coding endpoint (membership plan). THE k3 worker lane since 2026-07-22 —
-# kimi-code CLI is boss-only, never a worker. Key from Kimi Code Console, 0600.
-# k3 ONLY — kimi-for-coding[-highspeed] on this endpoint are K2.7 (banned).
-# 2026-07-24: aligned with kimi.com/code/docs third-party wiring — full
-# alias pinning + 1M context budget (endpoint metadata: k3 context_length
-# 1048576; without the budget pin Claude Code compacts at its default
-# window and the 1M is unreachable).
+# Points the Claude Code harness at Kimi's Anthropic-compatible endpoint,
+# uses an isolated config dir, pins model paths to k3, and budgets the
+# endpoint's native 1M context. Set the key-file location below for your setup.
 export ANTHROPIC_BASE_URL="https://api.kimi.com/coding/"
-# Isolated config dir, standard for every worker-lane wrapper: keeps the main
-# ~/.claude OAuth session from shadowing worker auth, and worker state
-# out of the live config.
 export CLAUDE_CONFIG_DIR="$HOME/.claude-kimi-config"
 export ANTHROPIC_API_KEY="$(cat "$HOME/.kimi-code/claude-code-key")"
 unset ANTHROPIC_AUTH_TOKEN
-# Default model for no-flag invocations; docs: the [1m] suffix is Claude
-# Code notation for the 1M context variant (env-var scenarios only — the
-# API itself serves plain "k3" at 1M). Ringer still passes --model k3 +
-# --effort per dispatch; that override keeps scoreboard attribution "k3".
 export ANTHROPIC_MODEL="k3[1m]"
-# Hard context budget so the 1M window applies even when --model k3
-# overrides ANTHROPIC_MODEL (per-docs knob; slightly under 1048576).
 export CLAUDE_CODE_MAX_CONTEXT_TOKENS=1000000
-# The endpoint silently aliases unknown model slugs (verified: a haiku slug
-# returns 200) — likely to kimi-for-coding = K2.7, which is banned. Pin
-# EVERY internal alias path to k3 so NO traffic leaves it: small/fast
-# calls, fable/opus/sonnet/haiku alias resolution, and subagent spawns.
 export ANTHROPIC_SMALL_FAST_MODEL="k3"
 export ANTHROPIC_DEFAULT_FABLE_MODEL="$ANTHROPIC_MODEL"
 export ANTHROPIC_DEFAULT_OPUS_MODEL="$ANTHROPIC_MODEL"
 export ANTHROPIC_DEFAULT_SONNET_MODEL="$ANTHROPIC_MODEL"
 export ANTHROPIC_DEFAULT_HAIKU_MODEL="$ANTHROPIC_MODEL"
 export CLAUDE_CODE_SUBAGENT_MODEL="$ANTHROPIC_MODEL"
-# Uses claude from PATH; set an absolute path here if it's not on PATH.
 exec claude "$@"

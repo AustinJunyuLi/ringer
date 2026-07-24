@@ -63,8 +63,7 @@ bin = "codex"
 # - {model_args}: expands to "-m <model>" only when the manifest task sets
 #   "model" or this engine sets model_default; otherwise it expands to nothing,
 #   preserving Codex's configured default. Setting model_default = "gpt-5.6-sol"
-#   pins the model instead of inheriting ~/.codex/config.toml drift and makes
-#   scoreboard attribution exact.
+#   pins the model instead of inheriting ~/.codex/config.toml drift.
 # - {engine_args}: expands to the task's optional "engine_args" list — the orchestrator
 #   sets per-task flags here, e.g. ["-c", "model_reasoning_effort=medium"] to match
 #   reasoning depth to task difficulty instead of inheriting the CLI-wide default
@@ -92,15 +91,12 @@ token_regex = "tokens\\s+used\\s*:?\\s*([0-9][0-9,]*)"
 model_report_regex = "(?m)^model:[ \\t]*([^ \\t\\r\\n]+)[ \\t]*\\r?$"
 
 # Grok Build CLI (xAI). Install: curl -fsSL https://x.ai/cli/install.sh | bash
-# (or: npm install -g @xai-official/grok), then `grok login` — OAuth on a
-# SuperGrok or X Premium Plus plan. Headless mode (-p) runs a full agentic
-# loop with tools and exits. Grok brings its own OS sandbox (Seatbelt on
-# macOS): profile "workspace" = read everywhere, write CWD + temp + ~/.grok,
-# network allowed. Models: grok-build, grok-composer-2.5-fast (route with the
-# per-task "model" field). Verified against Grok Build v0.2.81 (2026-07-06).
-# Note: --no-auto-update is accepted but absent from --help in v0.2.81 (grok
-# rejects unknown flags, so this is a hidden flag, not a typo) — it stops the
-# CLI self-updating mid-swarm.
+# (or: npm install -g @xai-official/grok), then `grok login`.
+# Headless mode (-p) runs a full agentic loop with tools and exits. Grok brings
+# its own OS sandbox (Seatbelt on macOS): profile "workspace" = read everywhere,
+# write CWD + temp + ~/.grok, network allowed. Models include grok-build and
+# grok-composer-2.5-fast; route with the per-task "model" field.
+# `--no-auto-update` prevents the CLI from self-updating during a run.
 # Uncomment to enable.
 # [engines.grok]
 # bin = "grok"
@@ -121,12 +117,11 @@ model_report_regex = "(?m)^model:[ \\t]*([^ \\t\\r\\n]+)[ \\t]*\\r?$"
 # ]
 # sandbox_args = ["--sandbox", "workspace"]
 # full_access_args = ["--sandbox", "off", "--permission-mode", "bypassPermissions"]
-# Grok's JSON output carries no usage/token fields (verified v0.2.81) — plan
-# CLIs report cost as "included in plan"; regex is a harmless no-match. Its JSON
-# also does not self-report a model, so no model_report_regex is configured.
+# Grok's JSON output carries no usage/token fields, so no token regex is needed.
+# Its JSON also does not self-report a model, so no model_report_regex is configured.
 # token_regex = "\"total_tokens\"\\s*:\\s*([0-9]+)"
 
-# For CI, acceptance evals, and trying Ringer without an API bill.
+# For CI, acceptance evals, and local testing.
 # [engines.mock]
 # bin = "python3"
 # args_template = [
@@ -136,11 +131,9 @@ model_report_regex = "(?m)^model:[ \\t]*([^ \\t\\r\\n]+)[ \\t]*\\r?$"
 # sandbox_args = []
 # full_access_args = []
 
-# OpenCode + OpenRouter — the universal model harness. One engine block runs
-# ANY OpenRouter-served model: the {model} placeholder is filled per task from
-# the manifest's "model" field, falling back to model_default below. Example
-# default: GLM-5.2 (z-ai/glm-5.2, roughly $0.74/M input, $2.33/M output as of
-# 2026-07) — the cheap-intelligence lane.
+# OpenCode + OpenRouter — a universal model harness. One engine block runs
+# any OpenRouter-served model: the {model} placeholder is filled per task from
+# the manifest's "model" field, falling back to model_default below.
 # OpenCode has no OS sandbox, so `bin` points at engines/opencode-sandboxed.sh
 # (macOS Seatbelt: network + reads open, writes confined to the task dir, a
 # per-run scratch dir, and OpenCode's state/config dirs). Auth: put your
@@ -151,7 +144,7 @@ model_report_regex = "(?m)^model:[ \\t]*([^ \\t\\r\\n]+)[ \\t]*\\r?$"
 # Uncomment and set an absolute path for `bin` to enable.
 # [engines.opencode]
 # bin = "/absolute/path/to/ringer/engines/opencode-sandboxed.sh"
-# model_default = "openrouter/z-ai/glm-5.2"
+# model_default = "openrouter/<provider>/<model>"
 # args_template = [
 #   "{taskdir}",
 #   "{access_args}",
@@ -185,21 +178,10 @@ out = "~/.ringer/artifacts/{run_id}.html"
 report_out = "~/.ringer/artifacts/{run_id}-report.html"
 index_out = "~/.ringer/artifacts/index.html"
 
-# ── Local lanes added 2026-07-20 ──────────────────────────────────────────
-# HARNESS FOLLOWS THE BOSS (user, 2026-07-22): each boss drives k3
-# workers through its OWN native harness.
-#   K3-bossed jobs  → [engines.kimi] (k3)
-#   Fable-bossed jobs → [engines.kimiclaude] (k3)
-# (History: kimi engine retired 2026-07-22 am in favor of kimiclaude
-# everywhere; reversed 2026-07-22 pm for K3-bossed work only.
-# qwen lanes deleted 2026-07-24.)
-#
-# [engines.kimi] — K3 workers via the kimi CLI (OAuth plan), used when the
-# BOSS is kimi. Prompt mode (-p) auto-approves and cannot combine with
-# -y/--auto (verified v0.27.0). No sandbox flag exists; writes are
-# unconfined — keep manifests scoped to their task dirs. {model_args}
-# expands to "-m kimi-code/k3" (or the k3max alias) so scoreboard
-# attribution is exact.
+# Kimi CLI engine. Prompt mode (-p) auto-approves and cannot combine with
+# -y/--auto (verified v0.27.0). No sandbox flag exists; writes are unconfined,
+# so keep manifests scoped to their task dirs. {model_args} expands to
+# "-m kimi-code/k3" (or the k3max alias) for per-task model selection.
 [engines.kimi]
 bin = "<PATH-TO>/.kimi-code/bin/kimi"
 model_default = "kimi-code/k3"
@@ -207,28 +189,16 @@ args_template = ["{access_args}", "{model_args}", "{engine_args}", "-p", "{spec}
 sandbox_args = []
 full_access_args = []
 
-# Claude Code CLI (OAuth plan) — the opus/sonnet/fable lane, added 2026-07-21.
-# Headless mode is -p/--print; verified against v2.1.216 (2026-07-21):
-# `--model` takes aliases opus/sonnet/fable or full names (e.g.
-# claude-fable-5), `--effort` takes low|medium|high|xhigh|max, and
-# `claude -p "..." --model opus --effort max` runs headless end to end.
-# `-m` is NOT a short flag for --model (checked `claude --help` 2026-07-21 —
-# the only -m-adjacent options are --max-budget-usd and --mcp-config), so this
-# block uses the {model} placeholder with an explicit "--model" instead of
-# {model_args} (which expands to a literal "-m <model>"). Like the kimi
-# lanes, claude has no OS sandbox on this machine: writes are unconfined, so
-# keep manifests scoped to their task dirs. sandbox_args carries
-# --dangerously-skip-permissions because headless workers must write files —
-# in -p mode permission prompts can never be answered, so without it every
-# write stalls (sandbox mode stays explicit per the config invariant).
-# Plain text output (no --output-format json): simplest, no token_regex
-# (same as kimi), and text mode doesn't self-report the model, so no
-# model_report_regex — scoreboard attribution therefore comes from the
-# manifest's per-task "model" field, so manifests SHOULD set it
-# (model_default covers omission). Per-task effort goes through engine_args,
-# e.g. ["--effort", "max"] (verified 2026-07-21). model = "claude-fable-5"
-# is the gated red-phone lane for rare advisor/reviewer consults — the boss
-# self-authorizes, sparingly.
+# Claude Code CLI. Headless mode is -p/--print. `--model` takes aliases or
+# full names, and `--effort` takes low|medium|high|xhigh|max.
+# Use the {model} placeholder with an explicit "--model" instead of
+# {model_args}, which expands to a literal "-m <model>". Claude has no OS
+# sandbox on this machine: writes are unconfined, so keep manifests scoped to
+# their task dirs. sandbox_args carries --dangerously-skip-permissions because
+# headless workers cannot answer permission prompts.
+# Plain text output needs no token_regex or model_report_regex; attribution
+# comes from the manifest's per-task "model" field, with model_default covering
+# omission. Per-task effort goes through engine_args, e.g. ["--effort", "max"].
 [engines.claude]
 bin = "<PATH-TO>/.local/bin/claude"
 model_default = "sonnet"
@@ -236,24 +206,9 @@ args_template = ["{access_args}", "--model", "{model}", "{engine_args}", "-p", "
 sandbox_args = ["--dangerously-skip-permissions"]
 full_access_args = []
 
-# Kimi K3 via the Claude Code harness — THE k3 worker lane (user
-# 2026-07-22: kimi-code retired from worker duty after kimiclaude went
-# 5/5 first-try on the capacity screen, equal-or-faster on every task,
-# research 4.8× faster; the CLI remains as the Kimi boss's harness only).
-# Same membership cap as the CLI. Endpoint
-# honors output_config.effort (verified: low=2.2k vs max=8k thinking
-# chars on the primes A/B) → effort is ADAPTIVE, Fable's per-task call,
-# passed via engine_args ["--effort", "low"|"high"|"max"] on every
-# dispatch (k3 joins the Claude-family adaptive rule; default_effort=high
-# if omitted, but never omit). k3 is natively 1M context here.
-# k3 ONLY: this endpoint's kimi-for-coding[-highspeed] slugs are K2.7
-# ("K2.7 Coding" display name) — BANNED family, never route them.
-# k3 at --effort max never runs UNSUPERVISED deliverable tasks of ANY
-# shape (broadened 2026-07-24 from builds-only after a double silent
-# no-op on a max-effort solve; thinker/second-opinion only at max —
-# unsupervised dispatches cap at --effort high).
-# Wrapper rewired 2026-07-24 per kimi.com/code/docs: all Claude Code
-# alias env vars pinned + 1M context budget (see overlay/bin/claude-kimi).
+# Kimi K3 via the Claude Code harness. The endpoint supports
+# output_config.effort; pass the desired effort through engine_args on each
+# dispatch. K3 provides a native 1M context window.
 [engines.kimiclaude]
 bin = "<PATH-TO>/.local/bin/claude-kimi"
 model_default = "k3"

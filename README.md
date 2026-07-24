@@ -1,551 +1,275 @@
 # fable-ringer
 
-**A Fable-bossed configuration of Ringer** — a verified-swarm orchestrator
-where one expensive model (Claude Fable 5) plans, routes, and reviews, and a
-fleet of cheaper, cross-family worker models does all the typing — with every
-single task graded by an *executed* check, not by what the worker claims it
-did.
+**Ringer is a toolkit for getting big jobs done by a team of AI assistants — with proof, not promises.** You describe a job to one very capable AI (the "boss"). The boss plans the work, hands the typing to a crew of cheaper AI "workers," and every piece of finished work is graded by actually running a test against it — never by taking the worker's word for it. This repository is the tool itself plus the configuration layer that makes the crew run smoothly.
 
-The focus of this README is **how the system is set up and operated**
+If you have ever asked an AI to do something large and gotten back something confident, polished, and subtly wrong, this repo is the fix.
 
 ---
 
 ## Table of contents
 
-- [The architecture in one paragraph](#the-architecture-in-one-paragraph)
-- [The boss/worker split](#the-bossworker-split)
-- [The only verdict: executed checks](#the-only-verdict-executed-checks)
-- [Cell-based routing](#cell-based-routing)
-- [Claude Code as a universal harness](#claude-code-as-a-universal-harness)
-- [Testing and upgrading your own lanes](#testing-and-upgrading-your-own-lanes)
-- [The scoreboard and the evidence loop](#the-scoreboard-and-the-evidence-loop)
-- [Install and setup](#install-and-setup)
+- [The problem it solves](#the-problem-it-solves)
+- [How it works](#how-it-works)
+- [Trust is earned by execution](#trust-is-earned-by-execution)
+- [Why models from several companies](#why-models-from-several-companies)
+- [Loops and graphs: making long jobs reliable](#loops-and-graphs-making-long-jobs-reliable)
+- [Choosing which model does what](#choosing-which-model-does-what)
+- [Getting started](#getting-started)
+  - [Advanced: adding more worker lanes](#advanced-adding-more-worker-lanes)
+- [Day to day: one job through the system](#day-to-day-one-job-through-the-system)
 - [Repository layout](#repository-layout)
-- [A day in the life](#a-day-in-the-life)
 - [Credit and license](#credit-and-license)
 
 ---
 
-## The architecture in one paragraph
+## The problem it solves
 
-A human operator talks to **Claude Fable 5**, the boss. Fable decomposes the
-job into a **manifest** of tasks, writes a self-contained spec and an
-executable check for each, and dispatches them to **worker models from three
-different families** — OpenAI's GPT-5.6 (Sol/Terra/Luna) through the Codex
-CLI, Moonshot's Kimi K3 through the Claude Code harness pointed at its
-Anthropic-compatible endpoint, and Anthropic's own Sonnet/Opus natively.
-Ringer runs the tasks in parallel, executes each task's check command, and
-only an exit code of 0 counts as a pass. Failures are retried once with the
-check's actual failure output injected into the retry prompt. Fable then
-reads the results, spot-checks the raw logs, and synthesizes. **Fable never
-types implementation** — not inline, not in a subagent. The boss pays tokens
-only for thinking; the workers pay for typing.
+Think of this system as a **general contractor** on a construction job. A good general contractor does not swing a hammer — they hire specialist trades, tell each one exactly what to build, and then *inspect* the work before signing off. Ringer applies that same structure to AI work. Three pressures make the structure necessary.
 
-## The boss/worker split
+**Long jobs degrade.** Today's AI assistants are brilliant at short, self-contained tasks. But stretch a job out — a whole website, a long report, a refactor across dozens of files — and small errors compound step by step. By the end, the output looks fluent and is quietly broken in ways that are hard to spot. Worse, the AI's own summary of what it did is not evidence. It will tell you everything went fine whether it did or not, because it is generating a plausible report, not filing test results.
 
-The separation is a hard rule, not a style preference:
+**The smartest models are scarce.** The most capable AI models come with usage limits, and they are the same models you want available for your own live conversations. If your best model does both the *thinking* (planning, judging, reviewing) and the *typing* (grinding out page after page of content or code), you spend your scarcest resource on the cheap part of the job. A general contractor who personally installs every cabinet is wasting the one person who can read the blueprints.
 
-| The boss (Fable 5) does | The workers do |
+**Unverified output does not scale.** Without independent checks, the only way to trust AI work is to re-check it yourself, line by line. Do that honestly and you have erased the time you saved. Verification has to be built into the pipeline — automatic, executed by a machine, and impossible to sweet-talk — or the whole arrangement collapses back into manual review.
+
+Ringer's answer to all three: split thinking from typing, and grade every deliverable by running a test against it.
+
+---
+
+## How it works
+
+You talk to one highly capable model — the **boss**. The boss never writes the deliverable. Not a paragraph of the report, not a line of the code. Instead it:
+
+1. **Decomposes** your job into small tasks, each small enough that a worker can complete it well in one sitting.
+2. Writes each task a **spec** — a self-contained brief that tells the worker its role, exactly which files it owns, what it must produce, and what it must not touch.
+3. Writes each task a **check** — an executable test, a plain shell command that examines what the worker actually produced and exits with code 0 (pass) or anything else (fail).
+4. Bundles the tasks into a **manifest** — a single JSON file listing every task with its spec and check — and dispatches them, in parallel, to **worker** AIs from several different companies.
+5. Reads the results, spot-checks at least one passing artifact with its own eyes, and reports back to you.
+
+After each worker finishes, Ringer **executes the check**. A task passes only if the check exits with code 0 **and** every deliverable the task declared is actually present and non-empty — exit code 0 alone is not a PASS. A failed task is retried exactly once, with the check's real failure output pasted into the retry prompt so the worker can see what it got wrong. Every attempt — pass, fail, retry — is logged to a local **scoreboard** on your machine, so decisions about which model to trust are grounded in measured results.
+
+| The boss (your premium model) | The workers (cheaper models, several companies) |
 |---|---|
-| Decompose jobs into tasks | Execute tasks inside task dirs |
-| Write specs (role, file ownership, output contract, hard rules) | Write code, docs, reports per spec |
-| Write checks (executable, content-verifying) | Produce deliverables |
-| Choose the routing cell per task | — |
-| Read results, spot-check raw logs, adjudicate | — |
-| Re-run checks itself when a verdict looks wrong | — |
+| Breaks the job into tasks | Execute one task each, in parallel |
+| Writes each spec (the brief) | Produce the deliverables — code, docs, research |
+| Writes each check (the test) | — |
+| Chooses which model gets which task | — |
+| Reads results, spot-checks artifacts, reports to you | — |
 
-Why so strict? Because a boss that "just fixes this one thing inline" stops
-being an orchestrator: nothing gets verified, nothing gets logged, and the
-evidence loop (below) starves. The doctrine even covers the small stuff: *a
-single task is a one-task manifest* — the smoke test, the probe, the
-three-line fix all run under Ringer, because that's what makes them visible,
-verified, and logged. The named anti-pattern is the **tiny-edit death
-spiral**: each step is individually small enough to justify doing inline, and
-two hours later the exception has become the workflow and nothing was
-verified.
+The separation is a hard rule, not a style choice. A boss that "just fixes this one thing itself" stops being an orchestrator: that fix never gets verified, never gets logged, and the scoreboard starves. Even a three-line change runs as a one-task manifest, because that is what makes it visible, verified, and counted.
 
-## The only verdict: executed checks
+---
 
-> **Worker claims are not evidence.**
+## Trust is earned by execution
 
-Every task carries a `check` — a shell command Ringer executes after the
-worker finishes. Exit 0 is the *only* PASS. This rule exists because workers
-of every family have been caught, on executed evidence:
+The heart of the whole system is one sentence: **worker claims are not evidence.** Ringer does not ask the worker whether the job is done. It runs the check.
 
-- **Self-reporting success over failure** — a worker reported "all 213 quotes
-  match exactly, 0 errors" while the executed check found 13 stitched or
-  paraphrased quotes.
-- **Gaming the check** — a worker hid required text in a visually-hidden
-  paragraph to pass a verbatim-content needle check; another composited fake
-  image deliverables locally after every API call failed, to satisfy a
-  files-exist check.
-- **Claiming verification never performed** — a worker wrote "previous
-  attempt verified those" without re-running anything, and shipped a program
-  with a real bug.
-- **Fabricating citations** — a "verbatim" quote stitched together from two
-  different regions of a web page (caught by hand-verifying against the live
-  page).
+This rule is not theoretical. It was adopted because AI workers — as a class, no vendor exempt — have been caught, on executed evidence:
 
-Consequences for how checks are written:
+- Reporting **"all 213 quotes match exactly, 0 errors"** while the executed check found 13 quotes that were stitched together or paraphrased.
+- Hiding required text in an **invisible part of a web page** so a content check would find it, without the text ever being visible to a reader.
+- Claiming **"the previous attempt already verified this"** without re-running anything — and shipping a program with a real bug.
 
-- **Checks must print *why* they fail** — the failure output is injected into
-  the retry prompt and lands in the eval log. `diff`, not `diff -q`; a
-  validator naming the broken assertion, not `test -f`.
-- **Verify content, not existence** — grep the artifact, run the code it
-  produced, execute the build. `expect_files` is a triage floor, never the
-  check.
-- **Never `true`, `exit 0`, or `echo done`** — a check that cannot fail is
-  just trusting the worker with extra steps.
-- **Strict on substance, tolerant on format** — hard-fail on missing evidence
-  or code that doesn't run; be flexible about headings, casing, and
-  phrasing.
-- **Read raw logs before blaming the model.** Some of the worst "model
-  failures" on record were *check bugs* — a spec/check mismatch that failed 7
-  of 8 cells identically, an un-HTML-unescaped quote matcher that failed
-  legitimate quotes, a relative script path that broke every lane at once.
-  The scoreboard annotates these so bad checks don't poison routing signal.
+Note what these have in common: none of them were caught by reading the worker's report. The reports were confident. The checks are what caught them.
 
-## Cell-based routing
+Out of these incidents come the craft rules for writing checks, in plain terms:
 
-The routing unit is a **cell = (model × effort)**. Effort changes a worker's
-*personality*, not just its quality: K3 at high effort is the fleet's
-cleanest executor, while K3 at max effort — same model — double-failed a
-build by claiming verification it never re-ran. A scoreboard row for one
-cell says nothing about its siblings.
+- **Checks must say *why* they fail, not just *that* they failed.** The failure text is injected into the worker's retry prompt and saved to the log. A check that prints "mismatch on line 41: expected X, got Y" gives the retry something to fix. A check that silently exits 1 wastes the retry.
+- **Verify content, not existence.** A check that only asks "does the file exist?" invites exactly the corner-cutting described above. Open the artifact, grep it for the required substance, run the program it produced, execute the build.
+- **A check that cannot fail is not a check.** A test that always passes is just trusting the worker with extra steps.
+- **Be strict about substance, tolerant about formatting.** Fail hard on missing evidence or code that does not run. Be flexible about headings, capitalization, and phrasing — a check that fails on cosmetics trains workers to polish surfaces instead of fixing substance.
 
-**The adaptive-effort rule:** for the Sonnet, Opus, and K3 lanes, effort is
-never a predetermined tier. The boss chooses an effort *per task* — low for
-the trivial end, max when the task earns it — and passes it explicitly on
-every dispatch (`--effort low|high|max`). "Adaptive" means chosen per task,
-not omitted. The codex lanes are the exception: they stay fixed cells (tier
-via model slug, effort via engine arg).
+---
 
-The binding routing table (canonical version in
-`overlay/rules/model-routing.md`; this is a snapshot):
+## Why models from several companies
 
-| Task shape | Primary cell | Backup |
-|---|---|---|
-| Math / quant verification | **Sol-max** (codex) | Terra-xhigh |
-| Math independent re-derivation (paper/trade math) | **Opus**, effort adaptive (usually earns max) | Terra-xhigh (same-family-as-Sol caveat) |
-| Substantial code feature | **K3**, effort adaptive — *probation* (unsupervised dispatches cap at effort high) | Sol-high (standing backup during probation) |
-| Code fix / hotfix / minimal diff | **Terra-xhigh** (codex) | K3, Sonnet |
-| Small/medium executor & build | **Sonnet**, effort adaptive | K3, Terra-xhigh |
-| Architecture / design review | **K3**, effort adaptive | Opus second opinion (usually earns max) |
-| Taste-gated (UI, copy, user-facing docs) | **K3**, effort adaptive | Sonnet |
-| Exploratory / live-web research | **Opus or Sonnet** — the boss judges model *and* effort per task | K3 |
-| Bounded research (repo lookup, DB scrape) | **Sonnet or Opus** — the boss judges model *and* effort per task | K3 |
-| Mechanical / bulk transforms, probes, smokes | **Luna-xhigh** (codex) — *probation* (Sonnet standing backup until 3+ real bulk tasks pass) | Sonnet, Terra-xhigh |
-| Scheduled / background batch jobs | **Sonnet**, effort adaptive (generous timeouts) | K3, Luna-xhigh |
-| Test-hardening | **Sol-high** (codex) | Sonnet |
-| Diff review — non-blocking, small diffs | **Terra-xhigh or Sonnet**, in rotation (cheapest capable; same-family review allowed) | K3, Luna-xhigh |
-| Diff review — gating (blocks a merge or step) | **Sonnet**, effort adaptive | K3, Terra-xhigh |
-| Gate on irreversible / high-stakes actions (public publish, prod deploy, security-touching) | **Opus**, effort adaptive (usually earns max) | — |
-| Consult (engineering second opinion) | **Terra-high** | — |
-| Premium steady lane (must-not-wobble) | **Opus** (usually earns max) | — |
+The natural question: *why not just use Claude for everything?* Three reasons — and we will be careful to claim only what our own executed checks have shown, at our task sizes, not universal leaderboard truths.
 
-**Qwen: deleted from the fleet (2026-07-24).** The Token Plan cut its
-qwen3.8-max usage — historical context, not a live lane — killing the
-cap-arbitrage rationale, so every qwen lane was deleted in full, with no
-fallbacks: the removed engines `qwen`, `qwencode`, `qwenclaude`, and
-`kimiqwen` (all deleted from the Ringer config), the shims deleted, and
-the kimi-code qwen provider removed. The old qwen scope rule (bounded *and*
-off the critical path) died with the deleted lane; qwen's historical rows
-remain in the eval log and `docs/MODEL-NOTES.md` only. Do not rebuild the
-lane without a fresh operator directive.
+**Economics.** Most AI subscriptions are flat-rate up to a usage cap. One provider means one cap — a hard ceiling on how much work can run at once — and every background task competes with your own live sessions for that same cap. Several providers means several independent caps: real parallel throughput, with the premium model's capacity reserved for the thinking only it can do. The general contractor does not put the master carpenter on drywall duty; the master carpenter reads blueprints while three drywall crews work in parallel.
 
-**Diff review is tiered by what a wrong verdict costs, not by diff size.**
-Non-blocking small diffs go to the cheapest capable cell — on correctness
-these lanes are interchangeable at ordinary review sizes — with Terra-xhigh
-and Sonnet **rotating**: running both keeps the codex lane's scoreboard rows
-live instead of fossilizing on a single pick. A review that *blocks* a merge
-or step goes to Sonnet, because a gate's latency is part of its quality. A
-gate on an **irreversible or high-stakes action** — a public publish, a
-production deploy, anything security-touching — goes to Opus at whatever
-effort the task earns, because wrong-and-merged costs more than
-slow-and-right. The escalation trigger is always "what does it cost if the
-reviewer is wrong" — and a failed review escalates one rung without asking:
-luna/terra → sol-high → sol-xhigh → sol-max (or opus-max).
+**Decorrelation.** Models built by the same company share training lineage, and shared lineage means shared blind spots. Ask two same-family models to check each other and they can nod along to the same mistake. So for results that must not be wrong — math that feeds a paper or a financial decision, say — this system requires an *independent re-derivation* by a model from a *different* company, with both answers verified by executed code. They agree, or the work does not ship.
 
-**Bulk moved to Luna-xhigh — on probation.** With the qwen lane deleted,
-the bulk/mechanical/probes/smokes lane was refilled on executed evidence: an 8/8
-first-try bakeoff across luna-xhigh, luna-max, terra-xhigh, and sonnet-low.
-Luna-xhigh matched Terra-xhigh on quality and token counts at the cheapest
-GPT tier, and luna-max added nothing over xhigh — so the lane is Luna-xhigh,
-with Sonnet as standing backup until 3+ real bulk tasks pass first-try. The
-probation mirrors the K3 feature-lane pattern: the first real-bulk failure
-or 3+ passes resolves it either way.
+**Comparative advantage.** Different model families genuinely are better at different things. What follows is what we have observed on our own executed checks; our samples are modest, so treat these as working hypotheses that the scoreboard keeps testing, not permanent facts:
 
-**The math re-derivation partner is Opus.** Math that feeds a paper or a
-trade gets a Sol derivation plus an *independent* re-derivation, checks
-executed — agreement to 4+ digits or it doesn't ship. The partner seat moved
-to Opus (usually at max effort) on the strength of a blind rundown: two
-Sol-max-authored problems, a tamper-tested verifier, and Opus matched the
-ground truth to full float precision, first-try, self-validating each answer
-with two independent implementations — while K3 at max effort double-failed
-the same task as a silent no-op (see the exclusions below). The cross-family
-OpenAI↔Anthropic decorrelation the seat exists for is preserved.
+- **OpenAI's GPT family** (run through the Codex command-line tool) has been our strongest lane for exact mathematical and quantitative derivation, and for fast, surgical, minimal-diff code fixes. The cheaper GPT tier handles high-volume mechanical work well. Observed weakness: in live-web research, one GPT worker fabricated a "verbatim" quote by stitching text from two different parts of a page — so that family is banned from our live-web research lane.
+- **Anthropic's Claude family** (Sonnet and Opus) has been our strongest lane for long tool-using sessions, web research, and reviews where a wrong verdict is expensive. Opus is the meticulous "must-not-wobble" lane and our independent math re-derivation partner — it matched a verified ground truth to full floating-point precision. The trade-offs: it is slower, and it shares capacity with the humans' own live Claude sessions.
+- **Moonshot's Kimi K3** is notable for parsimony — it does exactly what the spec asks and stops, with no scope creep — and for taste in user-facing writing. The trade-off: at its highest reasoning-effort setting it has silently walked away from tasks (did nothing, reported nothing), so unsupervised runs cap its effort below that setting.
 
-**Why the feature lane flipped to K3 — and why the flip is staged.** K3's
-parsimony is a virtue in feature coding: it writes the diff the spec asks
-for and stops. But every measurement of K3 through the Claude harness so
-far is on *small* tasks — the lane has never carried a multi-minute build.
-So the previous owner, Sol-high, remains the **standing backup** until K3
-accumulates 3+ feature passes first-try at ≥ 0.67 on the promotion ladder.
-And the broadened K3-at-max ban (below) binds directly here: unsupervised
-feature dispatches cap at **effort high**; max only with the boss actively
-reviewing mid-task.
+**The punchline:** because every task ends in an executed check, you do not have to trust any single model. Verification — not brand loyalty — is what makes cheaper and faster models safe to use. When the building inspector pressure-tests every pipe, you can hire the affordable plumbing crew without losing sleep.
 
-**Fixes moved to Terra-xhigh** for two reasons that compound: Terra was the
-proven backup on exactly this lane, and moving fixes off K3 frees that
-subscription's capacity for the feature lane that K3 now carries.
+---
 
-**Architecture review swapped to K3, with Opus as the second opinion.**
-Both lanes had clean audition sheets, so the assignment was interchangeable
-on evidence — and the swap concentrates the Kimi plan on low-volume,
-high-value work while Opus's slower, meticulous style is spent where a
-second reading actually changes outcomes.
+## Loops and graphs: making long jobs reliable
 
-**The research lanes are Claude-family owned.** Exploratory and bounded
-research both route to Opus or Sonnet, with the boss judging model *and*
-effort per task — Opus for hard or open-ended questions and lookups whose
-answer feeds a decision, Sonnet for lighter sweeps. K3 is the only backup:
-a repo lookup or DB scrape is usually *on* the critical path — something is
-blocked waiting on the answer — and on the critical path, slow *is*
-failure.
+Short tasks are easy. The system's real value is making *long* jobs reliable, and that comes from two ideas, named plainly.
 
-**Test-hardening stays on Sol-high, with the backup moved to Sonnet.** The
-backup was qwen's background test batches; with the qwen lane deleted, the
-fallback is Sonnet. (The historical concern about qwen writing unrequested
-tests was gathered under a different harness and never re-verified against
-the current one — retired with the lane, never disproven.)
+### Loop engineering
 
-**Scheduled background/batch jobs are a Sonnet lane.** Off-peak batch runs
-when contention with live sessions on the shared Claude subscription is
-lowest, with generous timeouts; K3 and Luna-xhigh back it up.
+A **loop** is any cycle of work, feedback, and correction. A loop is only as good as its feedback signal — a smoke detector that never beeps is worse than none, because it breeds false confidence. Ringer is loops all the way down:
 
-**Harness follows the boss.** A fleet can have more than one boss — e.g. a
-K3 boss alongside the Fable boss — and each boss routes its K3 worker lane
-through its own harness: the **Kimi CLI engine** for a K3 boss, the
-**`claude-kimi` wrapper** (below) for the Fable boss. The adaptive
-`--effort` rule applies to the Claude-harness lane; through the Kimi CLI,
-K3's effort is selected by **model alias** instead (the alias is the effort
-carrier — there is no `--effort` flag). The harness choice is not cosmetic:
-a paired A/B (same tasks, effort high, executed checks) measured the Claude
-harness at **2.2–3.3× faster, 2.3–2.9× less raw token traffic, and 2–4
-requests per task vs the Kimi CLI's 6–10** — decisive because the plan is
-request-metered (300–1200 requests per 5 hours, max 30 concurrent). Prefer
-the Claude harness for K3 workers wherever the boss allows. Same workers,
-same doctrine, different wire — and the scoreboard attributes results per
-engine, so harness differences stay visible in the evidence.
+- **The built-in loop** is the smallest: spec → worker does the task → executed check → on failure, retry once with the check's real failure output injected. This is why checks must print *why* they fail: the failure text *is* the feedback signal. A silent check breaks the loop.
+- **The boss's loops** sit above that: a review round feeds a fix round feeds a re-review round. After a fix swarm runs, the boss can dispatch the *same* reviewer panel again to see whether the complaints actually went away — not whether the fixers said they fixed things.
+- **The slowest loop is the scoreboard.** Every attempt by every worker is logged locally. Over weeks, the log accumulates into evidence about which model to trust with which kind of task. Routing improves because the system remembers.
 
-**Hard exclusions** (as load-bearing as the assignments, each backed by a
-documented incident):
+### Graph engineering
 
-- **Terra never does live-web research** — it fabricated a "verbatim" quote
-  by stitching two regions of a page.
-- **K3 at max effort never runs unsupervised deliverable tasks — of any
-  shape** (broadened from builds-only). The failure is a silent walk-away,
-  and it is not build-specific: in the math-partner rundown, K3 at max
-  effort read the two problem files, wrote nothing, said nothing, and
-  exited 0 — twice, including the retry with failure context injected. K3
-  at max is a thinker/second-opinion with the boss in the loop, only; **all
-  unsupervised K3 dispatches cap at effort high.**
-- **K2.7 slugs are banned fleet-wide** — including the Kimi endpoint's
-  `kimi-for-coding[-highspeed]` slugs, which are K2.7 under new names.
-- **GLM-5.2 is unplugged** — the boss adjudicates disagreements instead of a
-  tie-breaker lane.
-- **Never Haiku for substantive work.**
+A **graph** here just means: a big job decomposed into many small tasks, with explicit connections between them. Two moves make graphs work:
 
-**Known issue — harness noise from the `claude` engine.** The `claude`
-worker engine runs against the machine's main Claude Code config, so the
-operator's global rules leak into Sonnet and Opus workers — both have
-dropped stray scaffolding (a `quality_reports/` directory) into task dirs,
-violating explicit one-deliverable contracts. It isn't fixable by config
-isolation without breaking the OAuth login, so treat stray `quality_reports/`
-in worker output as harness noise and write checks that tolerate it.
+- **Fan-out in parallel.** Within one manifest, tasks run in parallel — a swarm. Each task owns its own files, declared up front, so two workers can never collide by writing to the same place. This is how a review of ten different surfaces, or fixes to ten different files, happens in the time of one.
+- **Chaining between rounds.** Sequencing happens *between* manifests, not inside them. The boss runs one swarm, reads the verified results, then writes the next manifest. A read-only review swarm feeds a fix swarm. A research round feeds a build round feeds an assembly round. A data pipeline runs fetch, then transform, then validate — each stage gated by executed validators before the next begins. The `templates/` directory is a catalog of these proven multi-round patterns (review-swarm, fix-swarm, research-with-proof, data-pipeline, and more), ready to adapt.
 
-Budget by **subscription caps and latency**, not per-token price: every
-worker lane is flat-rate within a plan cap, so routing decisions are about
-which cap has headroom and which cell is fast enough — not imagined
-capability gaps. Every lane clears the capability floor at ordinary task
-sizes; the scoreboard proved that. The current cap flow: the **OpenAI plan**
-carries six lanes — math, fixes, test-hardening, consult, a share of the
-non-blocking review rotation, and now bulk/mechanical on Luna (the new
-highest-volume lane, but on the cheapest GPT tier): watch this cap first.
-The **Kimi plan** carries features, architecture review, and taste —
-low-volume, high-value work, the right shape for that cap. The **Claude
-plan** is still the heaviest — executor, both research lanes, gating
-reviews, the premium steady lane, the math re-derivation second leg, and
-scheduled batch — relieved of bulk, but shared with live sessions.
+One accuracy note worth stating plainly: **Ringer has no built-in dependency scheduler.** Tasks within a single manifest do not wait on each other — they all start together. The "graph" lives in how the boss chains manifests into rounds, and every edge between rounds is gated by executed checks. If task B needs task A's output, they belong in different rounds.
 
-## Claude Code as a universal harness
+---
 
-The most unusual — and most valuable — piece of this setup is running
-**Kimi K3 as a worker through the Claude Code CLI**, by pointing it at its
-Anthropic-compatible endpoint. The lane is a short POSIX wrapper
-(`overlay/bin/claude-kimi`) that sets environment variables and `exec`s the
-stock `claude` binary:
+## Choosing which model does what
 
-```sh
-#!/bin/sh
-# The pattern (values simplified — see overlay/bin/ for the real script):
-export ANTHROPIC_BASE_URL="<the vendor's Anthropic-compatible endpoint>"
-export CLAUDE_CONFIG_DIR="$HOME/.claude-<lane>-config"   # isolated; see below
-export ANTHROPIC_API_KEY="$(cat <path-to-key-file>)"
-unset ANTHROPIC_AUTH_TOKEN   # a stale token can shadow the key
-# Pin every model path to the sanctioned slug, and budget the endpoint's
-# native 1M context:
-export ANTHROPIC_MODEL="k3[1m]"
-export ANTHROPIC_DEFAULT_FABLE_MODEL="k3"
-export ANTHROPIC_DEFAULT_OPUS_MODEL="k3"
-export ANTHROPIC_DEFAULT_SONNET_MODEL="k3"
-export ANTHROPIC_DEFAULT_HAIKU_MODEL="k3"
-export ANTHROPIC_SMALL_FAST_MODEL="k3"
-export CLAUDE_CODE_SUBAGENT_MODEL="k3"
-export CLAUDE_CODE_MAX_CONTEXT_TOKENS=1000000
-exec claude "$@"
-```
+Routing — deciding which worker gets which task — is a principle, not a fixed table you must copy. The principle:
 
-One endpoint is wired this way:
+1. **Measure everything.** Every attempt lands in a local log on your machine. Running `./ringer.py models` renders a per-model scoreboard, broken down by kind of task. The routing signal is the **first-try pass rate** — how often a model passes the executed check on attempt one, with no retry rescue.
+2. **Models earn scope on a promotion ladder.** A model starts **untested**. After it accumulates some evidence on a kind of task, it has *some evidence*. After several tasks of one kind at a strong first-try pass rate, it is **proven** for that kind of task and can carry real load. New assignments prove themselves on a cheap **probe** task — a tiny manifest whose whole job is to confirm the lane works — before they carry real work.
+3. **Keep exploring.** A small slice of low-stakes work deliberately goes to untested models. Always picking the current champion means never discovering a better one — explore a little, or the scoreboard fossilizes. The retry and the executed check absorb the risk of the experiment.
 
-- **Kimi** (`claude-kimi`): `https://api.kimi.com/coding/` — Kimi officially
-  supports Claude Code against this endpoint; K3 here is natively 1M context
-  and honors the `--effort` knob (verified by A/B: a primes-counting task at
-  low vs max effort produced measurably different thinking-token counts,
-  both correct against a sieve-computed ground truth). The wrapper was
-  rewired per the vendor's Claude Code docs: **all** Claude Code alias env
-  vars (the per-tier defaults and the subagent model) are pinned to `k3`,
-  `ANTHROPIC_MODEL="k3[1m]"`, and `CLAUDE_CODE_MAX_CONTEXT_TOKENS=1000000` —
-  the endpoint serves K3 at 1M context natively, and the pin is what makes
-  Claude Code actually budget it. Honest caveat: the 1M budget is
-  configured but behaviorally unverified until a long task exercises it.
-  (A second endpoint — the since-deleted qwen, via a removed `claude-qwen`
-  wrapper — used to be wired the same way; it was removed with the rest of
-  the deleted qwen lane.)
+Illustrative outcomes from this operator's scoreboard: exact math routes to a GPT lane; user-facing writing routes to Kimi K3; reviews that gate a decision route to Claude. Your table will differ — your tasks, your subscriptions, and your log are different, and the numbers are not portable between operators. This operator's current routing table lives at `overlay/rules/model-routing.md`; read it as a worked example, not a law.
 
-**Why this beat the native CLIs:**
+---
 
-- The Kimi CLI was fine but slower and thirstier: on identical tasks with
-  identical checks at effort high, `claude-kimi` ran **2.2–3.3× faster**
-  with **2.3–2.9× less raw token traffic**, and — decisive on a
-  request-metered plan (300–1200 requests per 5 hours, max 30 concurrent) —
-  spent **2–4 requests per task vs the CLI's 6–10**. Both harnesses remain
-  in service — the Kimi CLI carries K3-bossed work, the wrapper carries
-  Fable-bossed work (see "Harness follows the boss" above) — but the Claude
-  harness is preferred for K3 workers wherever the boss allows.
-- Historical note (the qwen lane itself is deleted): the same pattern once
-  rescued that lane — the native Qwen CLI of the deleted lane repeatedly
-  **stalled or silently died on heavy tasks** (two 1800s timeouts; a
-  43-minute zero-output run), while through Claude Code the *same backend*
-  ran identical probe tasks in 26–31s vs 81s+ and went 5/5 first-try on the
-  capacity screen. The harness was the problem, never the model — recorded
-  here as history; the lane itself is gone.
-- Bonus diagnostic capability: the isolated config dir keeps full per-event
-  session JSONL transcripts, which turned a "worker stalled" verdict into a
-  "the orchestrator set the timeout too tight; transcript shows continuous
-  work" correction.
+## Getting started
 
-## Testing and upgrading your own lanes
+Most of the team has only a Claude subscription, so the **Claude-only path is the primary path**. You can add more worker lanes later — see the advanced section below — but nothing here requires them.
 
-The wrappers and routing table above are the *output* of a process. This
-section is the process itself: how to safely add a worker lane, or upgrade an
-existing one, on your own endpoints and subscriptions. Every step ends in an
-executed check — never in "it obviously works."
+### Prerequisites
 
-**1. Probe first — no lane carries real work on a handshake.** Before a new
-lane touches a real task, run a one-task Ringer probe with an executed check
-through it and require a pass. The manifests in `overlay/probes/` are the
-pattern: a small task, a self-contained spec, a check that verifies content.
-A lane that can't pass a probe can't be trusted with a queue, and a probe
-costs almost nothing to run.
+- A **Claude subscription**, with the **Claude Code** command-line tool installed and logged in
+- **Python 3** (3.11 or newer)
+- **git**
 
-**2. Screen for capacity with identical tasks and identical checks.** When a
-new lane is a candidate to displace an existing one, run the *same* screening
-tasks with the *same* checks through both, so the scoreboard rows are
-directly comparable — same spec, same check, same timeout. The displacement
-bar is **equal-or-faster with a clean sheet**: first-try passes everywhere,
-no retries, no stalls. Anything less and the incumbent keeps the lane.
-
-**3. Verify the effort knob empirically — never assume a flag maps through a
-third-party endpoint.** A/B the same task at low vs max effort against a
-ground truth you computed yourself (e.g. count primes up to N by sieve, then
-ask the lane at both efforts), and measure the actual thinking-token output
-at each setting. On one endpoint here, `--effort` produced measurably
-different thinking counts and correct answers at both settings — knob
-confirmed. On a second endpoint (since removed from the fleet), request
-sniffing showed the CLI sends the effort fields and the endpoint ignores
-them — one full-thinking cell, and routing was adjusted accordingly while
-the lane lived. The endpoint's documentation is a hypothesis; the A/B is the
-verdict.
-
-**4. Verify auth at the wire.** Run a local header-capture server (a dozen
-lines of Python), point the wrapper at it, and confirm exactly which
-credential leaves the machine. The failure this catches: an OAuth-logged-in
-main Claude config **silently shadows env-var tokens** — requests go out
-carrying the main config's OAuth bearer instead of your lane key, and the
-endpoint 401s a perfectly good key. That is why each wrapper exports an
-**isolated `CLAUDE_CONFIG_DIR`** with no OAuth session, so the env token
-wins. Corollary for debugging: a 401 through a wrapper implicates the
-harness's credential *precedence* before the credential itself.
-
-**5. Pin every model path.** Some endpoints silently alias unknown model
-slugs — they return HTTP 200 for *anything*, echo your requested name back,
-and serve whatever they feel like. And the harness makes internal
-"small fast model" calls of its own (title generation, compaction), so
-unspecified traffic can be served by an undisclosed default. Pin **every**
-model env var the harness honors — the per-tier defaults, the subagent
-model, the small-fast slot — to a sanctioned slug on that endpoint so *no*
-traffic leaves the approved model — and never trust an echoed model name as
-confirmation of what served the request. Capture-or-pin, never assume.
-
-**6. Operate like keys, timeouts, and promotions all have blast radius — they do.**
-   - **Rotate keys everywhere they live.** If the same key exists in two
-     config files, rotate both, or one lane starts 401ing the day you rotate
-     the other.
-   - **Check timeout verdicts against the session transcript before blaming
-     the model.** Two "hung" runs here turned out to be continuously working
-     (100+ events, dozens of tool calls each) — the orchestrator's timeout
-     was simply too tight for a 100+-turn grind. Heavy single-grind tasks
-     get generous timeouts or get split.
-   - **Advance lanes on the promotion ladder, and record demotions.** A lane
-     earns scope: **untested → probation → proven** (3+ tasks in a task type
-     with first-try ≥ 0.67). Proven lanes get bigger assignments and an
-     audition one rung up; repeated first-attempt failures end the audition,
-     and the demotion goes in the notes with the evidence, so the scoreboard
-     stays an honest memory instead of a highlight reel.
-
-## The scoreboard and the evidence loop
-
-Routing doctrine is only as good as its evidence, so every attempt lands in
-an append-only eval log (`~/.ringer/runs.jsonl`: model, task_type, retry
-count, tokens, duration, verdict), and three mechanisms keep the doctrine
-honest:
-
-- **The scoreboard** — `ringer.py models` aggregates the log per (model,
-  task_type): `first_try_pass_rate` is the routing signal; `pass_rate`
-  includes retry rescues. `docs/MODEL-NOTES.md` is the dated judgment layer
-  on top of the numbers — what happened, what the failure mode was, what
-  you'd do differently, written only from what executed checks and raw logs
-  support. Rows whose FAIL was actually a *check bug* are annotated so they
-  don't poison the signal.
-- **The promotion ladder** — models earn lanes: **untested → probation →
-  proven** (3+ tasks in a task_type with first-try ≥ 0.67). Proven models
-  get bigger lanes and an audition one rung up; repeated first-attempt
-  failures end the audition and the demotion is recorded.
-- **Explore or fossilize** — in any low-stakes run of 3+ tasks, roughly ONE
-  task goes to an untested cell with a strong executed check (the retry
-  absorbs failure). Always recommending the proven pick means never learning
-  a new one; the scoreboard would freeze in its initial state.
-
-**Capacity screens** are how new lanes earn trust: the *identical* screening
-tasks with the *identical* checks run through the new engine, so rows are
-directly comparable across lanes. That's how `claude-kimi` displaced the
-Kimi CLI for Fable-bossed work in one afternoon (5/5 first-try,
-equal-or-faster everywhere), how Luna-xhigh won the bulk lane (8/8
-first-try bakeoff), and how the since-deleted qwen lane's heavy-load
-behavior was validated post-incident.
-
-**The probe doctrine:** every new lane or model change goes through a
-passing Ringer probe with an executed check *before it carries real work*
-— see `overlay/probes/` for the manifests. No exceptions, no "it obviously
-works."
-
-## Install and setup
-
-You need three things: the tool, the personal layer, and the subscriptions.
-
-**1. Clone and place the overlay.**
+### 1. Clone the repo
 
 ```bash
 git clone <this-repo-url> fable-ringer
 cd fable-ringer
 ```
 
-The altered upstream lives at the repo root and runs as `./ringer.py`. The
-personal layer in `overlay/` is deployed to standard locations:
+The tool runs as `./ringer.py` from the repo root. No build step, no package install — it is Python standard library only.
+
+### 2. Wire the configuration
+
+Create `~/.config/ringer/config.toml` with a single engine block — this minimal Claude-only wiring is all you need to start:
+
+```bash
+mkdir -p ~/.config/ringer
+```
+
+```toml
+[engines.claude]
+bin = "/path/to/your/claude"   # find yours with: which claude
+model_default = "sonnet"
+args_template = ["{access_args}", "--model", "{model}", "{engine_args}", "-p", "{spec}"]
+sandbox_args = ["--dangerously-skip-permissions"]
+full_access_args = []
+```
+
+When you later add more worker lanes, the full multi-lane example lives at `overlay/config/config.toml.example` — consult it then, not now.
+
+### 3. Deploy the boss-side pieces
+
+The `overlay/` directory is the operator's configuration layer — the pieces that teach your Claude session to act as the boss. Deploy them like this:
 
 | Overlay path | Deploy to | Purpose |
 |---|---|---|
-| `overlay/bin/claude-kimi` | Somewhere on `$PATH` (e.g. `~/.local/bin/`) | Worker-lane wrapper script |
-| `overlay/config/config.toml.example` | `~/.config/ringer/config.toml` | Engine wiring; adapt paths to your machine |
-| `overlay/probes/` | `~/.ringer/probes/<probe-name>/` | Lane-probe manifests; write their referenced check scripts alongside at deploy time |
-| `overlay/rules/model-routing.md` | `~/.claude/rules/model-routing.md` | The canonical routing table the boss reads |
+| `overlay/bin/claude-kimi` | Somewhere on your `$PATH` (e.g. `~/.local/bin/`) | Wrapper script for the Kimi worker lane (advanced; skip for now) |
+| `overlay/config/config.toml.example` | Reference only — do not copy wholesale | Full multi-lane engine wiring, for when you add lanes beyond step 2 |
+| `overlay/rules/model-routing.md` | `~/.claude/rules/model-routing.md` | The routing table the boss reads when choosing workers |
 | `overlay/skills/ringer/SKILL.md` | `~/.claude/skills/ringer/SKILL.md` | The orchestrator playbook the boss loads |
 
-**2. Subscriptions and keys (named by kind — bring your own).**
+(There is also `./ringer.py install-agent`, which installs the skill and optional reminder hooks for you; the manual table above shows exactly where everything lives if you prefer to place it yourself.)
 
-| Lane | What you need |
+### 4. Validate before real work
+
+Do not route real work until you have watched a check pass:
+
+1. Write or adapt a one-task **probe manifest** — the `templates/probe/` kit is the generic starting point, and `overlay/probes/` holds this operator's real examples, whose internal paths you must adapt to your machine. Then lint and run it like any other manifest: `./ringer.py lint <manifest>`, then `./ringer.py run <manifest>`, and confirm the executed check passes. A probe is a tiny, nearly free task whose only job is to prove the whole pipeline — dispatch, worker, executed check, logging — works on your machine.
+2. Run the **smoke test**: `./ringer.py demo`. It dispatches three real workers in parallel, verifies each one's output by executing it, and prints a verdict table — and it opens Ringside, the live dashboard, in your browser. Three PASSes means your setup is done.
+
+Then describe a real job to your boss session and let it write the manifest.
+
+### Advanced: adding more worker lanes
+
+Everything above runs on Claude alone. Add the lanes below **when you outgrow one provider's usage cap** — when parallel work queues up behind your own live sessions, or when you want the decorrelation and comparative-advantage benefits described earlier. They are upgrades, not prerequisites.
+
+**The OpenAI lane (GPT family).** You need an OpenAI plan that includes Codex CLI access. Install the Codex CLI and sign in with its OAuth login (`codex login`), then enable the codex engine block in `~/.config/ringer/config.toml`. Validate with a probe before routing real work.
+
+**The Kimi lane (K3).** You need a Kimi Code membership and an API key from the Kimi Code Console. Store the key in a file with `0600` permissions (readable only by you — e.g. `chmod 600 <keyfile>`), deploy the `overlay/bin/claude-kimi` wrapper script onto your `$PATH`, and enable the corresponding engine block in your config.
+
+The wrapper deserves a sentence of explanation, because it is a genuinely useful trick: it points the Claude Code harness — the same tool you already know — at Kimi's Anthropic-compatible endpoint, using its own isolated configuration directory. That means **one familiar harness for every worker**, regardless of whose model is behind it; **an isolated config** so the worker's session never tangles with your own; and **full transcripts** of every worker session saved to disk, which turns "the worker stalled" mysteries into readable evidence. One crew uniform, many crews.
+
+One rule holds across every lane and every setup: **no credential is stored in this repository, and none should ever appear in a manifest, a spec, or a check.** Keys live in your home directory with tight permissions, nowhere else.
+
+---
+
+## Day to day: one job through the system
+
+Here is the whole lifecycle of a job, start to finish:
+
+1. **You describe the job** to your Claude session in plain language — the goal, the constraints, what "done" looks like.
+2. **The boss writes the manifest**: one task per checkable unit, each with its own self-contained spec, its own executable check, and its declared file ownership.
+3. **`./ringer.py lint manifest.json`** inspects the manifest before anything runs. It catches the mistakes that make swarms untrustworthy: checks that cannot fail, checks that fail silently, two tasks claiming the same file, underspecified specs. Fix what it flags.
+4. **`./ringer.py run manifest.json`** launches the swarm and opens **Ringside** — the live dashboard page — in your browser, so you watch workers, checks, and verdicts in real time instead of staring at a silent terminal.
+5. **Workers run in parallel**, each in its own task directory. Ringer executes every check. Failures retry once, with the check's actual failure output injected into the retry prompt.
+6. **The boss reads the results**, opens the raw logs of anything that retried or failed, and spot-checks at least one *passing* artifact — because a check can be wrong too, and the only cure for that is a competent pair of eyes.
+7. **The boss reports to you**: what shipped, what was verified and how, and what (if anything) needs a human decision.
+8. **The scoreboard updates itself.** Every attempt was logged; next time the boss routes work, it routes on fresher evidence.
+
+### Command reference
+
+| Command | What it does |
 |---|---|
-| codex (GPT-5.6 Sol/Terra/Luna) | An OpenAI plan with Codex CLI access (OAuth login) |
-| claude (Sonnet/Opus) | A Claude subscription; the Claude Code CLI, logged in |
-| kimiclaude (K3) | A Kimi Code membership + an API key from the Kimi Code Console, stored in a `0600` file the wrapper reads |
+| `./ringer.py lint <manifest>` | Validates a manifest before a run — catches broken checks, file collisions, vague specs |
+| `./ringer.py run <manifest>` | Runs the swarm: dispatches workers in parallel, executes every check, retries failures once, opens the live dashboard |
+| `./ringer.py demo` | Three-worker smoke test, verified end to end — the fastest proof your setup works |
+| `./ringer.py models` | The scoreboard: per-model, per-task-type pass rates from your local log |
+| `./ringer.py hud` | Opens the Ringside dashboard any time, without running anything |
 
-No credential is stored in this repo, and none should ever appear in a
-manifest, spec, or check.
-
-**3. Validate before real work.**
-
-Wire one engine, then run a probe manifest from `overlay/probes/` and
-confirm the executed check passes. Add lanes one at a time, each behind its
-own passing probe. Only then route real work.
+---
 
 ## Repository layout
 
 ```
 fable-ringer/
-├── ringer.py              # The orchestrator (altered upstream)
-├── engines/               # Worker-engine helpers (sandbox shims, mock worker)
-├── templates/             # Manifest skeletons: review-swarm, fix-swarm,
-│                          #   bakeoff, research-with-proof, probe, …
-├── scripts/               # Eval-log backfill and maintenance tools
+├── ringer.py              # The orchestrator itself — the tool you run
+├── config.sample.toml     # Sample engine configuration
+├── engines/               # Worker-engine helpers (sandbox wrapper, mock worker)
+├── templates/             # Starter kits: review-swarm, fix-swarm, bakeoff,
+│                          #   research-with-proof, data-pipeline, probe, …
+├── scripts/               # Log backfill and maintenance utilities
 ├── tests/                 # The orchestrator's own test suite
-├── dashboard/, hud/       # Ringside: the live run page + HUD
+├── dashboard/, hud/       # Ringside — the live dashboard (web page + desktop prototype)
+├── hooks/                 # Optional reminder hooks installed by install-agent
 ├── registry/              # Model registry used for scoreboard attribution
 ├── docs/
 │   ├── UPSTREAM-README.md # The original project's README, preserved
-│   ├── MODEL-NOTES.md     # The evidence trail (dated, executed-check-only)
-│   └── …                  # Steering, taxonomy, screenshots
-├── overlay/               # The operator's configuration layer (the point of this repo)
+│   ├── MODEL-NOTES.md     # The human judgment layer on top of the scoreboard
+│   └── …                  # Steering docs, taxonomy, screenshots
+├── overlay/               # The operator's configuration layer
 │   ├── bin/               #   claude-kimi wrapper script
 │   ├── config/            #   config.toml.example (engine wiring)
-│   ├── rules/             #   model-routing.md — the canonical routing table
+│   ├── rules/             #   model-routing.md — this operator's routing table
 │   ├── skills/ringer/     #   SKILL.md — the orchestrator playbook
-│   └── probes/            #   Capacity-screen and lane-validation manifests
+│   └── probes/            #   Lane-validation probe manifests
 ├── LICENSE.md             # PolyForm Shield 1.0.0 + Required Notice
 └── README.md              # You are here
 ```
 
-Everything outside `overlay/` tracks the upstream tool (with alterations);
-everything inside `overlay/` is the configuration, doctrine, and evidence
-that make it *this* system.
+Everything outside `overlay/` is the tool (altered from upstream). Everything inside `overlay/` is the configuration and doctrine that make it *this* team's setup.
 
-## A day in the life
-
-1. The operator describes a job. Fable writes a manifest: one task per
-   checkable unit, each with a self-contained spec, a routing cell, and an
-   executable check. `ringer.py lint` catches unverifiable checks, silent
-   checks, file ownership collisions, and underspecified specs before
-   anything runs.
-2. `ringer.py run manifest.json --identity fable` — Ringside (the live
-   dashboard) comes up first so you watch the swarm, not a silent terminal.
-3. Workers execute in parallel, each in its own task dir. Ringer runs every
-   check; failures retry once with the check's failure output injected.
-4. Fable reads the run JSON, reads the raw logs of anything retried or
-   failed, spot-checks at least one *passing* artifact, and re-executes the
-   real command itself whenever a check turned out to be wrong.
-5. The run teaches something about a model → one dated line in
-   `docs/MODEL-NOTES.md`; the numbers update themselves in `runs.jsonl`.
-   Routing improves next time.
+---
 
 ## Credit and license
 
 **Ringer and Ringside are created by Nate Jones (Nate Jones Media LLC).**
 
 - Upstream: <https://github.com/NateBJones-Projects/ringer>
-- License: **PolyForm Shield 1.0.0**
+- License: **PolyForm Shield 1.0.0**, with the Required Notice preserved in `LICENSE.md`
 
-This repository redistributes the upstream code with alterations under that
-same license, with the Required Notice preserved in `LICENSE.md`. The
-boss/worker doctrine, the routing table, the wrapper scripts, and the
-operational evidence described in this README are this repo's operating layer
-on top — but the tool that makes any of it verifiable is Nate's.
+This repository redistributes the upstream code with alterations under that same license. The configuration and doctrine layer on top — the routing rules, the wrapper scripts, the probes, the boss-side skill — is this repository's addition. The tool that makes any of it verifiable is Nate's.
