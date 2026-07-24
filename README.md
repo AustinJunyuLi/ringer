@@ -6,10 +6,7 @@ fleet of cheaper, cross-family worker models does all the typing — with every
 single task graded by an *executed* check, not by what the worker claims it
 did.
 
-This repository is the altered upstream tool plus an operator's configuration
-layer (routing doctrine, wrapper scripts, probes, skill). The focus of this
-README is **how the system is set up and operated**; the upstream project it
-is built on is credited at the end.
+The focus of this README is **how the system is set up and operated**
 
 ---
 
