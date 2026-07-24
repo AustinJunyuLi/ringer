@@ -33,16 +33,16 @@ is built on is credited at the end.
 
 A human operator talks to **Claude Fable 5**, the boss. Fable decomposes the
 job into a **manifest** of tasks, writes a self-contained spec and an
-executable check for each, and dispatches them to **worker models from four
-different families** — OpenAI's GPT-5.6 (Sol/Terra) through the Codex CLI,
-Moonshot's Kimi K3 and Alibaba's Qwen through the Claude Code harness pointed
-at their Anthropic-compatible endpoints, and Anthropic's own Sonnet/Opus
-natively. Ringer runs the tasks in parallel, executes each task's check
-command, and only an exit code of 0 counts as a pass. Failures are retried
-once with the check's actual failure output injected into the retry prompt.
-Fable then reads the results, spot-checks the raw logs, and synthesizes.
-**Fable never types implementation** — not inline, not in a subagent. The
-boss pays tokens only for thinking; the workers pay for typing.
+executable check for each, and dispatches them to **worker models from three
+different families** — OpenAI's GPT-5.6 (Sol/Terra/Luna) through the Codex
+CLI, Moonshot's Kimi K3 through the Claude Code harness pointed at its
+Anthropic-compatible endpoint, and Anthropic's own Sonnet/Opus natively.
+Ringer runs the tasks in parallel, executes each task's check command, and
+only an exit code of 0 counts as a pass. Failures are retried once with the
+check's actual failure output injected into the retry prompt. Fable then
+reads the results, spot-checks the raw logs, and synthesizes. **Fable never
+types implementation** — not inline, not in a subagent. The boss pays tokens
+only for thinking; the workers pay for typing.
 
 ## The boss/worker split
 
@@ -120,9 +120,8 @@ cell says nothing about its siblings.
 never a predetermined tier. The boss chooses an effort *per task* — low for
 the trivial end, max when the task earns it — and passes it explicitly on
 every dispatch (`--effort low|high|max`). "Adaptive" means chosen per task,
-not omitted. Qwen is the exception: its endpoint ignores the effort knobs
-entirely (verified by request sniffing — the CLI sends them, the endpoint
-frees them), so **qwen is exactly one cell, always full thinking**.
+not omitted. The codex lanes are the exception: they stay fixed cells (tier
+via model slug, effort via engine arg).
 
 The binding routing table (canonical version in
 `overlay/rules/model-routing.md`; this is a snapshot):
@@ -130,42 +129,64 @@ The binding routing table (canonical version in
 | Task shape | Primary cell | Backup |
 |---|---|---|
 | Math / quant verification | **Sol-max** (codex) | Terra-xhigh |
+| Math independent re-derivation (paper/trade math) | **Opus**, effort adaptive (usually earns max) | Terra-xhigh (same-family-as-Sol caveat) |
 | Substantial code feature | **K3**, effort adaptive — *probation* (unsupervised dispatches cap at effort high) | Sol-high (standing backup during probation) |
 | Code fix / hotfix / minimal diff | **Terra-xhigh** (codex) | K3, Sonnet |
 | Small/medium executor & build | **Sonnet**, effort adaptive | K3, Terra-xhigh |
 | Architecture / design review | **K3**, effort adaptive | Opus second opinion (usually earns max) |
 | Taste-gated (UI, copy, user-facing docs) | **K3**, effort adaptive | Sonnet |
 | Exploratory / live-web research | **Opus or Sonnet** — the boss judges model *and* effort per task | K3 |
-| Bounded research (repo lookup, DB scrape) | **Sonnet or Opus** — the boss judges model *and* effort per task | K3; Qwen (scheduled background/batch only) |
-| Mechanical / bulk transforms, probes, smokes | **Qwen** † | Sonnet, Terra-xhigh |
-| Test-hardening | **Sol-high** (codex) | Qwen (background batches only) |
-| Diff review — non-blocking, small diffs | **Qwen** † **or Terra-xhigh**, in rotation (cheapest capable; same-family review allowed) | Sonnet, K3 |
+| Bounded research (repo lookup, DB scrape) | **Sonnet or Opus** — the boss judges model *and* effort per task | K3 |
+| Mechanical / bulk transforms, probes, smokes | **Luna-xhigh** (codex) — *probation* (Sonnet standing backup until 3+ real bulk tasks pass) | Sonnet, Terra-xhigh |
+| Scheduled / background batch jobs | **Sonnet**, effort adaptive (generous timeouts) | K3, Luna-xhigh |
+| Test-hardening | **Sol-high** (codex) | Sonnet |
+| Diff review — non-blocking, small diffs | **Terra-xhigh or Sonnet**, in rotation (cheapest capable; same-family review allowed) | K3, Luna-xhigh |
 | Diff review — gating (blocks a merge or step) | **Sonnet**, effort adaptive | K3, Terra-xhigh |
 | Gate on irreversible / high-stakes actions (public publish, prod deploy, security-touching) | **Opus**, effort adaptive (usually earns max) | — |
 | Consult (engineering second opinion) | **Terra-high** | — |
 | Premium steady lane (must-not-wobble) | **Opus** (usually earns max) | — |
 
-† **Qwen scope rule** — every qwen-primary row above is conditional: qwen
-takes a task only if it is **both bounded** (single deliverable, expected
-wallclock ≤ ~15 min, no whole-repo sweeps or 1000+-line-input grinds) **and
-off the critical path** (nothing and nobody blocked waiting on it). Anything
-bigger **or** gating routes to Sonnet/K3/Opus per the table. The one
-deliberate exception: scheduled background/batch jobs may use qwen at any
-size with generous timeouts. Rationale: qwen's failure mode is **latency,
-never quality** — it is one full-thinking cell with no effort knob, so
-latency scales hard with input, and slow *is* failure on a gate.
+**Qwen: deleted from the fleet (2026-07-24).** The Token Plan cut its
+qwen3.8-max usage — historical context, not a live lane — killing the
+cap-arbitrage rationale, so every qwen lane was deleted in full, with no
+fallbacks: the removed engines `qwen`, `qwencode`, `qwenclaude`, and
+`kimiqwen` (all deleted from the Ringer config), the shims deleted, and
+the kimi-code qwen provider removed. The old qwen scope rule (bounded *and*
+off the critical path) died with the deleted lane; qwen's historical rows
+remain in the eval log and `docs/MODEL-NOTES.md` only. Do not rebuild the
+lane without a fresh operator directive.
 
 **Diff review is tiered by what a wrong verdict costs, not by diff size.**
 Non-blocking small diffs go to the cheapest capable cell — on correctness
-these lanes are interchangeable at ordinary review sizes — with qwen and
-Terra-xhigh **rotating**: running both keeps the codex lane's scoreboard
-rows live instead of fossilizing on a single pick. A review that
-*blocks* a merge or step goes to Sonnet, because a gate's latency is part of
-its quality. A gate on an **irreversible or high-stakes action** — a public
-publish, a production deploy, anything security-touching — goes to Opus at
-whatever effort the task earns, because wrong-and-merged costs more than
+these lanes are interchangeable at ordinary review sizes — with Terra-xhigh
+and Sonnet **rotating**: running both keeps the codex lane's scoreboard rows
+live instead of fossilizing on a single pick. A review that *blocks* a merge
+or step goes to Sonnet, because a gate's latency is part of its quality. A
+gate on an **irreversible or high-stakes action** — a public publish, a
+production deploy, anything security-touching — goes to Opus at whatever
+effort the task earns, because wrong-and-merged costs more than
 slow-and-right. The escalation trigger is always "what does it cost if the
-reviewer is wrong."
+reviewer is wrong" — and a failed review escalates one rung without asking:
+luna/terra → sol-high → sol-xhigh → sol-max (or opus-max).
+
+**Bulk moved to Luna-xhigh — on probation.** With the qwen lane deleted,
+the bulk/mechanical/probes/smokes lane was refilled on executed evidence: an 8/8
+first-try bakeoff across luna-xhigh, luna-max, terra-xhigh, and sonnet-low.
+Luna-xhigh matched Terra-xhigh on quality and token counts at the cheapest
+GPT tier, and luna-max added nothing over xhigh — so the lane is Luna-xhigh,
+with Sonnet as standing backup until 3+ real bulk tasks pass first-try. The
+probation mirrors the K3 feature-lane pattern: the first real-bulk failure
+or 3+ passes resolves it either way.
+
+**The math re-derivation partner is Opus.** Math that feeds a paper or a
+trade gets a Sol derivation plus an *independent* re-derivation, checks
+executed — agreement to 4+ digits or it doesn't ship. The partner seat moved
+to Opus (usually at max effort) on the strength of a blind rundown: two
+Sol-max-authored problems, a tamper-tested verifier, and Opus matched the
+ground truth to full float precision, first-try, self-validating each answer
+with two independent implementations — while K3 at max effort double-failed
+the same task as a silent no-op (see the exclusions below). The cross-family
+OpenAI↔Anthropic decorrelation the seat exists for is preserved.
 
 **Why the feature lane flipped to K3 — and why the flip is staged.** K3's
 parsimony is a virtue in feature coding: it writes the diff the spec asks
@@ -173,7 +194,7 @@ for and stops. But every measurement of K3 through the Claude harness so
 far is on *small* tasks — the lane has never carried a multi-minute build.
 So the previous owner, Sol-high, remains the **standing backup** until K3
 accumulates 3+ feature passes first-try at ≥ 0.67 on the promotion ladder.
-And the K3-at-max build ban (below) binds directly here: unsupervised
+And the broadened K3-at-max ban (below) binds directly here: unsupervised
 feature dispatches cap at **effort high**; max only with the boss actively
 reviewing mid-task.
 
@@ -190,110 +211,138 @@ second reading actually changes outcomes.
 **The research lanes are Claude-family owned.** Exploratory and bounded
 research both route to Opus or Sonnet, with the boss judging model *and*
 effort per task — Opus for hard or open-ended questions and lookups whose
-answer feeds a decision, Sonnet for lighter sweeps. Bounded research leaves
-qwen entirely except scheduled background/batch jobs, for the same reason
-the scope rule exists: a repo lookup or DB scrape is usually *on* the
-critical path — something is blocked waiting on the answer — and on the
-critical path, slow *is* failure.
+answer feeds a decision, Sonnet for lighter sweeps. K3 is the only backup:
+a repo lookup or DB scrape is usually *on* the critical path — something is
+blocked waiting on the answer — and on the critical path, slow *is*
+failure.
 
-**Test-hardening moved to Sol-high.** Honest rationale: the evidence
-behind qwen's habit of writing unrequested tests was gathered under a
-different harness and was never re-verified against the current one — the
-concern is **retired, not disproven**. What remains true is the scope rule:
-test-hardening is usually gating, and qwen is one full-thinking cell with
-no effort knob. Qwen keeps background test batches, where latency doesn't
-matter and its throughput is an asset.
+**Test-hardening stays on Sol-high, with the backup moved to Sonnet.** The
+backup was qwen's background test batches; with the qwen lane deleted, the
+fallback is Sonnet. (The historical concern about qwen writing unrequested
+tests was gathered under a different harness and never re-verified against
+the current one — retired with the lane, never disproven.)
 
-**The Qwen scope rule** († on every qwen row above) exists because of how
-qwen fails. It has never failed a review on correctness through the Claude
-harness — quality is not the risk. The risk is that it is exactly one
-full-thinking cell with no effort knob: latency scales hard with input size,
-and on anything gating, slow *is* failure. So the rule is two conjunctive
-tests — bounded **and** off the critical path — with the background/batch
-exception, and anything bigger or gating routes up to Sonnet/K3/Opus.
+**Scheduled background/batch jobs are a Sonnet lane.** Off-peak batch runs
+when contention with live sessions on the shared Claude subscription is
+lowest, with generous timeouts; K3 and Luna-xhigh back it up.
 
 **Harness follows the boss.** A fleet can have more than one boss — e.g. a
-K3 boss alongside the Fable boss — and each boss routes the K3 and qwen
-worker lanes through its own harness: the **Kimi CLI engines** for a K3 boss,
-the **`claude-kimi` / `claude-qwen` wrappers** (below) for the Fable boss.
-The adaptive `--effort` rule applies to the Claude-harness lanes; through the
-Kimi CLI, K3's effort is selected by **model alias** instead (the alias is
-the effort carrier — there is no `--effort` flag). Same workers, same
-doctrine, different wire — and the scoreboard attributes results per engine,
-so harness differences stay visible in the evidence.
+K3 boss alongside the Fable boss — and each boss routes its K3 worker lane
+through its own harness: the **Kimi CLI engine** for a K3 boss, the
+**`claude-kimi` wrapper** (below) for the Fable boss. The adaptive
+`--effort` rule applies to the Claude-harness lane; through the Kimi CLI,
+K3's effort is selected by **model alias** instead (the alias is the effort
+carrier — there is no `--effort` flag). The harness choice is not cosmetic:
+a paired A/B (same tasks, effort high, executed checks) measured the Claude
+harness at **2.2–3.3× faster, 2.3–2.9× less raw token traffic, and 2–4
+requests per task vs the Kimi CLI's 6–10** — decisive because the plan is
+request-metered (300–1200 requests per 5 hours, max 30 concurrent). Prefer
+the Claude harness for K3 workers wherever the boss allows. Same workers,
+same doctrine, different wire — and the scoreboard attributes results per
+engine, so harness differences stay visible in the evidence.
 
 **Hard exclusions** (as load-bearing as the assignments, each backed by a
 documented incident):
 
 - **Terra never does live-web research** — it fabricated a "verbatim" quote
   by stitching two regions of a page.
-- **K3 at max effort never types unsupervised builds** — the sloppy-verify
-  failure was model personality, not harness; it survived a harness swap.
+- **K3 at max effort never runs unsupervised deliverable tasks — of any
+  shape** (broadened from builds-only). The failure is a silent walk-away,
+  and it is not build-specific: in the math-partner rundown, K3 at max
+  effort read the two problem files, wrote nothing, said nothing, and
+  exited 0 — twice, including the retry with failure context injected. K3
+  at max is a thinker/second-opinion with the boss in the loop, only; **all
+  unsupervised K3 dispatches cap at effort high.**
 - **K2.7 slugs are banned fleet-wide** — including the Kimi endpoint's
   `kimi-for-coding[-highspeed]` slugs, which are K2.7 under new names.
 - **GLM-5.2 is unplugged** — the boss adjudicates disagreements instead of a
   tie-breaker lane.
-- **Qwen on live-web research: probation only** — the original ban was earned
-  by harness stalls, not the model; it's a backup/explore slot until it
-  accumulates passes.
+- **Never Haiku for substantive work.**
+
+**Known issue — harness noise from the `claude` engine.** The `claude`
+worker engine runs against the machine's main Claude Code config, so the
+operator's global rules leak into Sonnet and Opus workers — both have
+dropped stray scaffolding (a `quality_reports/` directory) into task dirs,
+violating explicit one-deliverable contracts. It isn't fixable by config
+isolation without breaking the OAuth login, so treat stray `quality_reports/`
+in worker output as harness noise and write checks that tolerate it.
 
 Budget by **subscription caps and latency**, not per-token price: every
 worker lane is flat-rate within a plan cap, so routing decisions are about
 which cap has headroom and which cell is fast enough — not imagined
 capability gaps. Every lane clears the capability floor at ordinary task
 sizes; the scoreboard proved that. The current cap flow: the **OpenAI plan**
-carries five lanes — math, fixes, test-hardening, consult, and a share of
-the non-blocking review rotation. The **Kimi plan** carries features,
-architecture review, and taste — low-volume, high-value work, the right
-shape for that cap. The **Claude plan** is the heaviest — executor, both
-research lanes, gating reviews, and the premium steady lane — and is the
-cap to watch first. **Qwen** is narrowed to bulk/mechanical work, its share
-of the review rotation, and background/batch jobs, all under the scope rule
-above.
+carries six lanes — math, fixes, test-hardening, consult, a share of the
+non-blocking review rotation, and now bulk/mechanical on Luna (the new
+highest-volume lane, but on the cheapest GPT tier): watch this cap first.
+The **Kimi plan** carries features, architecture review, and taste —
+low-volume, high-value work, the right shape for that cap. The **Claude
+plan** is still the heaviest — executor, both research lanes, gating
+reviews, the premium steady lane, the math re-derivation second leg, and
+scheduled batch — relieved of bulk, but shared with live sessions.
 
 ## Claude Code as a universal harness
 
 The most unusual — and most valuable — piece of this setup is running
-**Kimi K3 and Qwen as workers through the Claude Code CLI**, by pointing it
-at their Anthropic-compatible endpoints. Each lane is a ~10-line POSIX
-wrapper (`overlay/bin/claude-kimi`, `overlay/bin/claude-qwen`) that sets
-environment variables and `exec`s the stock `claude` binary:
+**Kimi K3 as a worker through the Claude Code CLI**, by pointing it at its
+Anthropic-compatible endpoint. The lane is a short POSIX wrapper
+(`overlay/bin/claude-kimi`) that sets environment variables and `exec`s the
+stock `claude` binary:
 
 ```sh
 #!/bin/sh
-# The pattern (values simplified — see overlay/bin/ for the real scripts):
+# The pattern (values simplified — see overlay/bin/ for the real script):
 export ANTHROPIC_BASE_URL="<the vendor's Anthropic-compatible endpoint>"
 export CLAUDE_CONFIG_DIR="$HOME/.claude-<lane>-config"   # isolated; see below
-export ANTHROPIC_AUTH_TOKEN="$(cat <path-to-key-file>)"  # or API_KEY, per endpoint
-export ANTHROPIC_SMALL_FAST_MODEL="<a sanctioned slug on that endpoint>"
+export ANTHROPIC_API_KEY="$(cat <path-to-key-file>)"
+unset ANTHROPIC_AUTH_TOKEN   # a stale token can shadow the key
+# Pin every model path to the sanctioned slug, and budget the endpoint's
+# native 1M context:
+export ANTHROPIC_MODEL="k3[1m]"
+export ANTHROPIC_DEFAULT_FABLE_MODEL="k3"
+export ANTHROPIC_DEFAULT_OPUS_MODEL="k3"
+export ANTHROPIC_DEFAULT_SONNET_MODEL="k3"
+export ANTHROPIC_DEFAULT_HAIKU_MODEL="k3"
+export ANTHROPIC_SMALL_FAST_MODEL="k3"
+export CLAUDE_CODE_SUBAGENT_MODEL="k3"
+export CLAUDE_CODE_MAX_CONTEXT_TOKENS=1000000
 exec claude "$@"
 ```
 
-Two endpoints are wired this way:
+One endpoint is wired this way:
 
 - **Kimi** (`claude-kimi`): `https://api.kimi.com/coding/` — Kimi officially
   supports Claude Code against this endpoint; K3 here is natively 1M context
   and honors the `--effort` knob (verified by A/B: a primes-counting task at
   low vs max effort produced measurably different thinking-token counts,
-  both correct against a sieve-computed ground truth).
-- **Qwen** (`claude-qwen`): the Alibaba ModelStudio Token Plan's
-  Anthropic-compatible endpoint, which lists Claude Code as an officially
-  supported harness. The effort knob is a no-op here (verified by request
-  sniffing) — one full-thinking cell.
+  both correct against a sieve-computed ground truth). The wrapper was
+  rewired per the vendor's Claude Code docs: **all** Claude Code alias env
+  vars (the per-tier defaults and the subagent model) are pinned to `k3`,
+  `ANTHROPIC_MODEL="k3[1m]"`, and `CLAUDE_CODE_MAX_CONTEXT_TOKENS=1000000` —
+  the endpoint serves K3 at 1M context natively, and the pin is what makes
+  Claude Code actually budget it. Honest caveat: the 1M budget is
+  configured but behaviorally unverified until a long task exercises it.
+  (A second endpoint — the since-deleted qwen, via a removed `claude-qwen`
+  wrapper — used to be wired the same way; it was removed with the rest of
+  the deleted qwen lane.)
 
 **Why this beat the native CLIs:**
 
-- The native Qwen CLI (`qwencode`) repeatedly **stalled or silently died on
-  heavy tasks** (two 1800s timeouts; a 43-minute zero-output run). Through
-  Claude Code, the *same backend* ran identical probe tasks in 26–31s vs
-  81s+, went 5/5 first-try on the capacity screen, and later passed a
-  15.6-minute heavyweight code-review audition first-try. The harness was
-  the problem, never the model.
-- The Kimi CLI was fine but slower: on identical tasks with identical
-  checks, `claude-kimi` matched or beat it on all five, with the
-  live-research task **4.8× faster** (256s vs 1224s). Both harnesses remain
-  in service — the Kimi CLI carries K3-bossed work, the wrappers carry
-  Fable-bossed work (see "Harness follows the boss" above).
+- The Kimi CLI was fine but slower and thirstier: on identical tasks with
+  identical checks at effort high, `claude-kimi` ran **2.2–3.3× faster**
+  with **2.3–2.9× less raw token traffic**, and — decisive on a
+  request-metered plan (300–1200 requests per 5 hours, max 30 concurrent) —
+  spent **2–4 requests per task vs the CLI's 6–10**. Both harnesses remain
+  in service — the Kimi CLI carries K3-bossed work, the wrapper carries
+  Fable-bossed work (see "Harness follows the boss" above) — but the Claude
+  harness is preferred for K3 workers wherever the boss allows.
+- Historical note (the qwen lane itself is deleted): the same pattern once
+  rescued that lane — the native Qwen CLI of the deleted lane repeatedly
+  **stalled or silently died on heavy tasks** (two 1800s timeouts; a
+  43-minute zero-output run), while through Claude Code the *same backend*
+  ran identical probe tasks in 26–31s vs 81s+ and went 5/5 first-try on the
+  capacity screen. The harness was the problem, never the model — recorded
+  here as history; the lane itself is gone.
 - Bonus diagnostic capability: the isolated config dir keeps full per-event
   session JSONL transcripts, which turned a "worker stalled" verdict into a
   "the orchestrator set the timeout too tight; transcript shows continuous
@@ -326,10 +375,11 @@ ground truth you computed yourself (e.g. count primes up to N by sieve, then
 ask the lane at both efforts), and measure the actual thinking-token output
 at each setting. On one endpoint here, `--effort` produced measurably
 different thinking counts and correct answers at both settings — knob
-confirmed. On another, request sniffing showed the CLI sends the effort
-fields and the endpoint ignores them — one full-thinking cell, and routing
-was adjusted accordingly. The endpoint's documentation is a hypothesis; the
-A/B is the verdict.
+confirmed. On a second endpoint (since removed from the fleet), request
+sniffing showed the CLI sends the effort fields and the endpoint ignores
+them — one full-thinking cell, and routing was adjusted accordingly while
+the lane lived. The endpoint's documentation is a hypothesis; the A/B is the
+verdict.
 
 **4. Verify auth at the wire.** Run a local header-capture server (a dozen
 lines of Python), point the wrapper at it, and confirm exactly which
@@ -345,11 +395,11 @@ harness's credential *precedence* before the credential itself.
 slugs — they return HTTP 200 for *anything*, echo your requested name back,
 and serve whatever they feel like. And the harness makes internal
 "small fast model" calls of its own (title generation, compaction), so
-unspecified traffic can be served by an undisclosed default. Pin
-**`ANTHROPIC_SMALL_FAST_MODEL`** to a sanctioned slug on that endpoint so
-*no* traffic leaves the approved model — and never trust an echoed model
-name as confirmation of what served the request. Capture-or-pin, never
-assume.
+unspecified traffic can be served by an undisclosed default. Pin **every**
+model env var the harness honors — the per-tier defaults, the subagent
+model, the small-fast slot — to a sanctioned slug on that endpoint so *no*
+traffic leaves the approved model — and never trust an echoed model name as
+confirmation of what served the request. Capture-or-pin, never assume.
 
 **6. Operate like keys, timeouts, and promotions all have blast radius — they do.**
    - **Rotate keys everywhere they live.** If the same key exists in two
@@ -394,8 +444,9 @@ honest:
 tasks with the *identical* checks run through the new engine, so rows are
 directly comparable across lanes. That's how `claude-kimi` displaced the
 Kimi CLI for Fable-bossed work in one afternoon (5/5 first-try,
-equal-or-faster everywhere), and how the qwen lane's heavy-load behavior was
-validated post-incident.
+equal-or-faster everywhere), how Luna-xhigh won the bulk lane (8/8
+first-try bakeoff), and how the since-deleted qwen lane's heavy-load
+behavior was validated post-incident.
 
 **The probe doctrine:** every new lane or model change goes through a
 passing Ringer probe with an executed check *before it carries real work*
@@ -418,8 +469,9 @@ personal layer in `overlay/` is deployed to standard locations:
 
 | Overlay path | Deploy to | Purpose |
 |---|---|---|
-| `overlay/bin/claude-kimi`, `claude-qwen` | Somewhere on `$PATH` (e.g. `~/.local/bin/`) | Worker-lane wrapper scripts |
+| `overlay/bin/claude-kimi` | Somewhere on `$PATH` (e.g. `~/.local/bin/`) | Worker-lane wrapper script |
 | `overlay/config/config.toml.example` | `~/.config/ringer/config.toml` | Engine wiring; adapt paths to your machine |
+| `overlay/probes/` | `~/.ringer/probes/<probe-name>/` | Lane-probe manifests; write their referenced check scripts alongside at deploy time |
 | `overlay/rules/model-routing.md` | `~/.claude/rules/model-routing.md` | The canonical routing table the boss reads |
 | `overlay/skills/ringer/SKILL.md` | `~/.claude/skills/ringer/SKILL.md` | The orchestrator playbook the boss loads |
 
@@ -427,10 +479,9 @@ personal layer in `overlay/` is deployed to standard locations:
 
 | Lane | What you need |
 |---|---|
-| codex (GPT-5.6 Sol/Terra) | An OpenAI plan with Codex CLI access (OAuth login) |
+| codex (GPT-5.6 Sol/Terra/Luna) | An OpenAI plan with Codex CLI access (OAuth login) |
 | claude (Sonnet/Opus) | A Claude subscription; the Claude Code CLI, logged in |
 | kimiclaude (K3) | A Kimi Code membership + an API key from the Kimi Code Console, stored in a `0600` file the wrapper reads |
-| qwenclaude (Qwen) | An Alibaba ModelStudio Token Plan key for its Anthropic-compatible endpoint, stored in a config file the wrapper reads |
 
 No credential is stored in this repo, and none should ever appear in a
 manifest, spec, or check.
@@ -458,7 +509,7 @@ fable-ringer/
 │   ├── MODEL-NOTES.md     # The evidence trail (dated, executed-check-only)
 │   └── …                  # Steering, taxonomy, screenshots
 ├── overlay/               # The operator's configuration layer (the point of this repo)
-│   ├── bin/               #   claude-kimi, claude-qwen wrapper scripts
+│   ├── bin/               #   claude-kimi wrapper script
 │   ├── config/            #   config.toml.example (engine wiring)
 │   ├── rules/             #   model-routing.md — the canonical routing table
 │   ├── skills/ringer/     #   SKILL.md — the orchestrator playbook

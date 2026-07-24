@@ -122,6 +122,9 @@ confidence = "verified"
 source = "https://www.kimi.com/code"
 last_verified = 2026-07-20
 
+# HISTORICAL (2026-07-24): the qwen engines below were deleted from the
+# fleet (Token Plan cap cut, full burn). Blocks retained ONLY so the
+# scoreboard can label historical runs.jsonl rows — do not wire them.
 [engines.qwen]
 harness = "omp"
 access = "ModelStudio token plan"

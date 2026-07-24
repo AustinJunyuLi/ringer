@@ -186,12 +186,13 @@ report_out = "~/.ringer/artifacts/{run_id}-report.html"
 index_out = "~/.ringer/artifacts/index.html"
 
 # ── Local lanes added 2026-07-20 ──────────────────────────────────────────
-# HARNESS FOLLOWS THE BOSS (user, 2026-07-22): each boss drives k3/qwen
+# HARNESS FOLLOWS THE BOSS (user, 2026-07-22): each boss drives k3
 # workers through its OWN native harness.
-#   K3-bossed jobs  → [engines.kimi] (k3) and [engines.kimiqwen] (qwen)
-#   Fable-bossed jobs → [engines.kimiclaude] (k3) and [engines.qwenclaude] (qwen)
+#   K3-bossed jobs  → [engines.kimi] (k3)
+#   Fable-bossed jobs → [engines.kimiclaude] (k3)
 # (History: kimi engine retired 2026-07-22 am in favor of kimiclaude
-# everywhere; reversed 2026-07-22 pm for K3-bossed work only.)
+# everywhere; reversed 2026-07-22 pm for K3-bossed work only.
+# qwen lanes deleted 2026-07-24.)
 #
 # [engines.kimi] — K3 workers via the kimi CLI (OAuth plan), used when the
 # BOSS is kimi. Prompt mode (-p) auto-approves and cannot combine with
@@ -206,37 +207,6 @@ args_template = ["{access_args}", "{model_args}", "{engine_args}", "-p", "{spec}
 sandbox_args = []
 full_access_args = []
 
-# Qwen 3.8 Max Preview via omp (qwen-token-plan provider, metered). Fallback
-# lane only — slow (thinking=max through the Beijing endpoint) and billed per
-# token. Root cause of the native qwen CLI "timeouts" found 2026-07-20: NOT
-# the backend — qwen-code's default 45s contentGenerator.timeout vs the
-# token-plan endpoint's >45s first response. Fixed in ~/.qwen/settings.json
-# (contentGenerator.timeout=300000). Prefer [engines.qwencode] below.
-[engines.qwen]
-bin = "<PATH-TO>/.local/bin/omp"
-model_default = "qwen-token-plan/qwen3.8-max-preview"
-args_template = ["-p", "--no-session", "--approval-mode", "yolo", "--cwd", "{taskdir}", "--model", "{model}", "{access_args}", "{engine_args}", "{spec}"]
-sandbox_args = []
-full_access_args = []
-
-# Qwen Code CLI (headless -p; Auto Mode executes tools) against the
-# ModelStudio Token Plan — flat-rate, and the plan's sanctioned tool. Model
-# ids come from ~/.qwen/settings.json modelProviders: qwen3.8-max-preview,
-# qwen3.7-plus, qwen3.6-flash, glm-5.2, deepseek-v4-pro/-flash, kimi-k2.7-code,
-# MiniMax-M2.5, ... — route per task via the manifest "model" field. No OS
-# sandbox; writes unconfined — scope specs to task dirs. The Beijing endpoint
-# has high first-token latency (>45s observed): give tasks generous timeout_s.
-[engines.qwencode]
-bin = "<PATH-TO>/.local/bin/qwen"
-model_default = "qwen3.8-max-preview"
-# --approval-mode yolo is hidden from `qwen --help` but real (choices: plan,
-# default, auto-edit, auto, yolo). Headless default ("auto") denies
-# write_file/run_shell_command — workers can't produce artifacts without it.
-args_template = ["{access_args}", "{model_args}", "{engine_args}", "--approval-mode", "yolo", "-o", "json", "-p", "{spec}"]
-sandbox_args = []
-full_access_args = []
-token_regex = '"tokens":\{"prompt":[0-9]+,"candidates":[0-9]+,"total":([0-9]+)'
-
 # Claude Code CLI (OAuth plan) — the opus/sonnet/fable lane, added 2026-07-21.
 # Headless mode is -p/--print; verified against v2.1.216 (2026-07-21):
 # `--model` takes aliases opus/sonnet/fable or full names (e.g.
@@ -245,7 +215,7 @@ token_regex = '"tokens":\{"prompt":[0-9]+,"candidates":[0-9]+,"total":([0-9]+)'
 # `-m` is NOT a short flag for --model (checked `claude --help` 2026-07-21 —
 # the only -m-adjacent options are --max-budget-usd and --mcp-config), so this
 # block uses the {model} placeholder with an explicit "--model" instead of
-# {model_args} (which expands to a literal "-m <model>"). Like the kimi/qwen
+# {model_args} (which expands to a literal "-m <model>"). Like the kimi
 # lanes, claude has no OS sandbox on this machine: writes are unconfined, so
 # keep manifests scoped to their task dirs. sandbox_args carries
 # --dangerously-skip-permissions because headless workers must write files —
@@ -266,23 +236,6 @@ args_template = ["{access_args}", "--model", "{model}", "{engine_args}", "-p", "
 sandbox_args = ["--dangerously-skip-permissions"]
 full_access_args = []
 
-# Qwen via the Claude Code harness — added 2026-07-22. The ModelStudio Token
-# Plan serves an Anthropic-compatible endpoint and lists Claude Code as an
-# officially supported harness; the claude-qwen wrapper sets
-# ANTHROPIC_BASE_URL/AUTH_TOKEN (key read from ~/.qwen/settings.json) and
-# execs the claude binary. Replaces qwencode as the PRIMARY qwen lane —
-# qwencode repeatedly stalled under heavy tasks; keep it as fallback.
-# Live plan models (GET /models, 2026-07-22): qwen3.8-max-preview,
-# qwen3.7-max, qwen3.7-plus, qwen3.6-flash, deepseek-v4-pro (+glm-5.2
-# UNPLUGGED, wan image models). The k2.7/k2.6 slugs in ~/.qwen/settings.json
-# are no longer served. Same headless invariants as [engines.claude].
-[engines.qwenclaude]
-bin = "<PATH-TO>/.local/bin/claude-qwen"
-model_default = "qwen3.8-max-preview"
-args_template = ["{access_args}", "--model", "{model}", "{engine_args}", "-p", "{spec}"]
-sandbox_args = ["--dangerously-skip-permissions"]
-full_access_args = []
-
 # Kimi K3 via the Claude Code harness — THE k3 worker lane (user
 # 2026-07-22: kimi-code retired from worker duty after kimiclaude went
 # 5/5 first-try on the capacity screen, equal-or-faster on every task,
@@ -295,27 +248,15 @@ full_access_args = []
 # if omitted, but never omit). k3 is natively 1M context here.
 # k3 ONLY: this endpoint's kimi-for-coding[-highspeed] slugs are K2.7
 # ("K2.7 Coding" display name) — BANNED family, never route them.
-# k3 at --effort max never types unsupervised builds (sloppy-verify was
-# model personality, not harness — the ban survives the swap).
+# k3 at --effort max never runs UNSUPERVISED deliverable tasks of ANY
+# shape (broadened 2026-07-24 from builds-only after a double silent
+# no-op on a max-effort solve; thinker/second-opinion only at max —
+# unsupervised dispatches cap at --effort high).
+# Wrapper rewired 2026-07-24 per kimi.com/code/docs: all Claude Code
+# alias env vars pinned + 1M context budget (see overlay/bin/claude-kimi).
 [engines.kimiclaude]
 bin = "<PATH-TO>/.local/bin/claude-kimi"
 model_default = "k3"
 args_template = ["{access_args}", "--model", "{model}", "{engine_args}", "-p", "{spec}"]
 sandbox_args = ["--dangerously-skip-permissions"]
-full_access_args = []
-
-# Qwen via the Kimi Code harness — added 2026-07-22 (user decision: qwen gets
-# a native worker lane). Models resolve through Kimi Code's qwen-token-plan
-# provider (OpenAI-compatible Token Plan endpoint; credential shadowing ruled
-# out by header capture 2026-07-22). kimi CLI returns as a worker harness for
-# QWEN ONLY — k3 workers stay on [engines.kimiclaude] per the morning's
-# retirement note. Same headless invariants as the old kimi engine: -p
-# auto-approves, no sandbox, writes unconfined — scope manifests to task
-# dirs. Effort comes from the kimi-code model alias (reasoning_effort
-# injected by Kimi Code; alias default_effort=high today).
-[engines.kimiqwen]
-bin = "<PATH-TO>/.kimi-code/bin/kimi"
-model_default = "qwen-token-plan/qwen3.8-max-preview"
-args_template = ["{access_args}", "{model_args}", "{engine_args}", "-p", "{spec}"]
-sandbox_args = []
 full_access_args = []
