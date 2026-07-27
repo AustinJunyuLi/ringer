@@ -135,9 +135,39 @@ artifact, not evidence about Sonnet.
   configs is now zero; the only remaining mentions are deliberate
   do-not-re-add notes.
 
+## Phase 4 — kimiclaude hard-wiped, committed, pushed
+
+- **kimiclaude deleted** (user decision) across 17 files. Removed: engine
+  blocks from the live config and `overlay/config/config.toml.example`;
+  `overlay/bin/claude-kimi` and the local `claude_kimi.py` launcher;
+  `~/.claude-kimi-config/` (361 KB); both `overlay/probes/kimiclaude-*.json`;
+  identity blocks; the `lane-kimiclaude` probe task; and 6 eval rows (56 → 50,
+  backup `runs.jsonl.bak-prekimiclaude-20260727`). Four lanes remain.
+- **History kept, lane gone** — same treatment as qwen. The 2026-07-22
+  kimiclaude entries in MODEL-NOTES stay, plus a new tombstone stating what was
+  given up (the lane was lighter on the request-metered Kimi plan; the 1M
+  context is NOT lost, the `k3-*` aliases also declare 1048576). If k3 cap
+  pressure ever binds, that is the argument for rebuilding — and it should be
+  re-measured, not assumed.
+- **overlay/rules and overlay/skills resynced** from the deployed `~/.claude`
+  copies, which had diverged across phases 1–3.
+- **Re-proved after removal:** 5/5 PASS attempt 1, run exit 0 — mock 0.1s,
+  claude/sonnet-low 10.7s, kimi/k3-max 13.3s, kimi/k3-low 17.7s,
+  codex/luna-low 22.0s.
+- **Test suite run against a pristine-HEAD worktree baseline**: 31 failed /
+  188 passed on both, **byte-identical failure sets** — zero regressions. The
+  31 are the known Windows failures this repo's CI already treats as
+  non-blocking. (Comparing sets rather than asserting suite-green is the
+  lesson MODEL-NOTES records from the 2026-07-10 steering-profiles run.)
+- **Secret-scanned before pushing** — the repo is public. No keys in the diff;
+  the one `ANTHROPIC_API_KEY` hit was a deletion line from the removed wrapper,
+  which read from a file and never held an inline key. Confirmed the qwen
+  plaintext key was never committed to any branch.
+- **Committed and pushed to `main`**: `c1457fd..736ef1d`, 21 files, +2026/-1068.
+
 ## Next
 
 - The `.cmd` finding likely contaminates earlier Windows scoreboard rows on
   codex/kimiclaude — treat pre-2026-07-27 first-try rates on those lanes as
   depressed by a harness bug, not model quality.
-- Nothing committed or pushed.
+- Committed and pushed: 736ef1d on main.
