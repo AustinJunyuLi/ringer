@@ -18,12 +18,6 @@ cross-family CLIs are installed here. Two deltas from the overlay source:
 - **Qwen is off this fleet** (user decision 2026-07-27). No qwenclaude,
   qwencode or kimiqwen lane exists; the identity blocks and eval rows were
   deleted. Do not re-add.
-- **kimiclaude is deleted** (user decision 2026-07-27). k3 through the
-  Claude Code harness existed solely to give k3 per-task effort. Once the
-  native kimi CLI was shown to do that through per-effort model aliases,
-  the lane was pure duplication on a scarcer plan. Wrapper, isolated
-  config dir, probes, identity blocks and eval rows all removed. Four
-  lanes remain: codex, claude, kimi, mock. Do not rebuild it.
 
 ## Route CELLS, not models
 
@@ -89,10 +83,7 @@ Ringer engines (see `~/.config/ringer/config.toml`):
   adaptive via the `model` field: `k3-low` / `k3-high` / `k3-max` (all →
   underlying `k3` at 1M context), plus `kimi-code/k3-256k` for the
   smaller context. `-p` auto-approves with no sandbox — scope specs to
-  task dirs. The `kimiclaude` lane (k3 routed through the Claude Code
-  harness) was **deleted 2026-07-27** once this lane proved adaptive: it
-  existed only to supply per-task effort, and duplicated a model this
-  lane already serves more cheaply against the plan. Do not rebuild it.
+  task dirs.
 - **claude** — `sonnet` / `opus` workers, effort via
   `engine_args: ["--effort", "high"|"max"]`; `claude-fable-5` red-phone
   only (gated, see below). Draws on the same Claude subscription as live
@@ -171,9 +162,7 @@ a trivial instance of that shape still gets low.
   supervised thinker/second-opinion cell with the boss in the loop,
   ONLY. All unsupervised k3 dispatches cap at `--effort high`.
 - **One harness per model.** k3 always routes to the `kimi` engine,
-  whichever model is bossing. The old "harness follows the boss" rule
-  existed to pick between two k3 lanes; with `kimiclaude` deleted there
-  is nothing to pick.
+  whichever model is bossing.
 - **Never Haiku for substantive work.**
 - **No qwen lane exists on this fleet** (2026-07-27). Do not wire one.
 

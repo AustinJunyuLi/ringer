@@ -1,173 +1,61 @@
-# 2026-07-27 — Ringer reinstall (qwen-free) + routing rule deployment
+# 2026-07-27 — Ringer reinstall on Windows (econ-phd-04)
 
-## Goal
+## End state
 
-Reinstall Ringer on the Windows laptop with every backend except qwen, and
-deploy the evidence-driven routing doctrine (scoreboard overrules the table)
-that existed in the fork's `overlay/` but had never been installed here.
+Four lanes, all native `.exe`, all adaptive on effort:
 
-Context: Ringer was removed from this machine earlier the same day after a qwen
-worker stalled. The trigger was qwen specifically — codex, kimi and claude were
-never implicated — so the removal took out more than the problem warranted.
+| Lane | Binary | Effort control |
+|---|---|---|
+| codex | vendored `codex.exe` (not `codex.cmd`) | `-c model_reasoning_effort=…` |
+| claude | `claude.exe` | `--effort …` |
+| kimi | `kimi.exe` | model alias `k3-low` / `k3-high` / `k3-max` |
+| mock | `python.exe` + `engines/mock_worker.py` | n/a |
+
+Verified 5/5 PASS attempt 1, run exit 0. Qwen is off the fleet entirely.
+Ringer is the default delegation path; routing words override per job.
+
+Reproduce on another machine with `python overlay/deploy.py` — see
+`overlay/DEPLOY.md`.
+
+## Findings worth keeping
+
+**A `.cmd` shim silently DROPS any argument containing a newline.**
+CreateProcess routes `.cmd` through cmd.exe, which discards the whole
+argument — no error. Probed directly with `create_subprocess_exec` and the arg
+`"line one:\nPAYLOAD\nline three"`: via `.cmd` the child received `[]`; via
+`.exe` it received the string intact. So a multi-line `{spec}` arrives as
+*nothing* and the worker answers a truncated prompt — which reads exactly like
+a model failure. Every engine `bin` is a native `.exe` for this reason.
+
+**Checks must be `bash -c`-wrapped.** Ringer runs checks through
+`create_subprocess_shell`, i.e. cmd.exe here, so POSIX check syntax dies with
+`'{' is not recognized`. This is why `ringer.py demo` fails wholesale on
+Windows even though its workers write their files correctly.
+
+**`--help` is not the capability surface.** `kimi --help` exposes only
+`-m/--model` and no effort flag, and I concluded from that the lane could not
+do per-task effort. Wrong: the Kimi Code config docs state that entries in the
+models table *are* the `-m` aliases and `default_effort` is a per-alias field,
+so several aliases can point at one model with different efforts. Check the
+config schema before declaring a capability absent.
+
+**Headless Claude auth can expire while the GUI looks fine.**
+`claude.exe -p` returned `Failed to authenticate: OAuth session expired`
+reproducibly while the live session worked normally. An instant zero-token
+failure on the claude lane means re-auth, not model trouble.
+
+**Compare failure sets, not totals.** The suite reports 31 failed / 188 passed
+on Windows. A pristine-HEAD worktree reports the identical set, so that is the
+baseline, not a regression — matching this repo's non-blocking-Windows CI.
 
 ## Decisions
 
-- **Qwen rows purged from the eval log** (user choice). 35 archived rows in,
-  11 qwen rows dropped, 24 restored. The plan estimated 13/22; the real split
-  is 11/24 — the earlier count keyed on `model` alone, the filter also caught
-  `worker_engine`/`expected_model`/`reported_model`.
-- **Ringer is the default delegation path**, routing words override per job
-  (user choice). Deployed as authored in the overlay.
-- **Boss stays role-defined.** The overlay routing file names Fable as boss
-  throughout; that contradicts the 2026-07-25 Fable-boss retirement. Retirement
-  is the newer decision and won — all boss references rewritten to "the boss
-  (the session model)". Fable kept as a user-invoked red-phone advisor lane.
-- **Qwen identity blocks deleted** from `registry/model-identity.toml`. They had
-  been retained solely to label historical runs.jsonl rows; those rows are gone,
-  so the reason went with them.
-- **MODEL-NOTES qwen history KEPT** (85 mentions). It is the judgment layer
-  explaining *why* qwen was dropped — deleting it invites a future session to
-  re-add the lane. Purging the scoreboard input is not the same as erasing the
-  reasoning.
-- **Orphan `references/` removed** from the installed skill. `install-agent`
-  ships the generic split edition; the personalized overlay SKILL.md is
-  self-contained and links to none of them, and the fork's CLAUDE.md explicitly
-  forbids mixing the two editions.
-
-## Two harness bugs found — both Windows-permanent, neither a model failure
-
-1. **`.cmd` shims silently drop newline-containing arguments.** Verified by
-   direct probe: via `.cmd` the child got `[]`, via `.exe` the string arrived
-   intact. Multi-line specs vanished entirely; codex wrote an empty file and k3
-   said the prompt looked cut off — both correct on the input they got. Every
-   engine `bin` is now a native `.exe`; `claude-kimi.cmd` was rewritten as
-   `claude_kimi.py` run by `python.exe`. Fixed → codex and kimiclaude passed
-   attempt 1.
-2. **Checks must be `bash -c`-wrapped.** `create_subprocess_shell` is cmd.exe
-   here, so the upstream POSIX checks die with `'{' is not recognized`. This is
-   why `ringer.py demo` fails wholesale on Windows despite its workers doing
-   the work correctly.
-
-Both are documented at the top of `docs/MODEL-NOTES.md` and in the header of
-`~/.config/ringer/config.toml`.
-
-## Resolved blocker — headless OAuth
-
-`claude.exe --model sonnet -p` was returning *"Failed to authenticate: OAuth
-session expired and could not be refreshed"*, reproducible outside Ringer while
-the live app session kept working. Re-auth cleared it and the lane passed
-attempt 1. Lesson worth keeping: the headless CLI path can be unauthenticated
-while the GUI looks healthy, so an instant zero-token failure on a Claude lane
-means re-auth first. The 2 FAIL rows recorded before the fix are an auth
-artifact, not evidence about Sonnet.
-
-## State at end of session
-
-- **5 of 5 lanes pass by executed check, all attempt 1, run exit 0**: mock
-  0.1s, claude/sonnet-low 14.6s, kimi/k3 16.5s, kimiclaude/k3-low 20.4s,
-  codex/luna-low 33.5s.
-- Scoreboard tiers on `probe` after three sweeps (rows accumulate, so several
-  lanes already cleared the 3-task bar): **proven** — Kimi K3 via kimi CLI
-  (5 tasks, 80% first-try), Kimi K3 via Claude harness (4, 75%), GPT-5.6
-  Luna·low (3, 67%). **Probation** — Claude Sonnet (5 tasks but 60% first-try,
-  under the 0.67 bar *only* because of the two pre-re-auth FAILs, which are an
-  auth artifact; discount them and the lane is clean), mock (1 task).
-- 50 eval rows, 0 qwen.
-- Scoreboard attributing correctly after adding `[engines.kimiclaude]` and
-  `[engines.mock]` to the identity registry (was printing `k3 [unregistered]`).
-- Repo is dirty and uncommitted: modified `docs/MODEL-NOTES.md`,
-  `registry/model-identity.toml`; new `overlay/probes/win-lane-probe.json`,
-  `quality_reports/`. Nothing pushed.
-
-## Phase 2 — adaptive tuning + upstream sync
-
-- **kimiclaude NOT deleted; the capability check overturned the premise.**
-  `kimi --help` has no effort flag at all — effort on the native CLI lives in
-  `~/.kimi-code/config.toml` (`[thinking] effort`, per-model `default_effort`),
-  which is process-global and would race if mutated per task. So kimiclaude is
-  the *only* per-task adaptive path to k3, and deleting it would have traded
-  the adaptive lane for a fixed one plus lost the pinned 1M context. Latency
-  didn't support consolidation either: the same kimi lane measured 188s and
-  16.5s across two sweeps — variance, not a trend.
-- **Adaptive everywhere it's possible.** Routing rule rewritten: the old
-  "Codex lanes stay fixed cells" clause is gone, and every table row now names
-  a MODEL only, with effort chosen per task. Added a capability table showing
-  where the knob lives per lane (codex `-c model_reasoning_effort`, claude and
-  kimiclaude `--effort`, kimi CLI none). Only surviving pinned-effort mention
-  is the escalation ladder, where the rung *is* the effort.
-- **Scoreboard-outranks-the-table promoted to an explicit rule**, not just an
-  aside in the evidence-strength bullet.
-- **Repo brought current with upstream.** The two repos share NO git ancestor
-  (the fork is an independent repo, not a GitHub fork), so `git log
-  HEAD..upstream/main` misleadingly lists ~100 commits. The real file-level
-  delta on shared paths was exactly one thing: `templates/bakeoff-kit`,
-  imported via `git checkout upstream/main -- templates/bakeoff-kit`. Working
-  tree now matches upstream on every shared file; `ringer.py` still identical;
-  17 template dirs; new kit lints clean.
-
-## Phase 3 — kimi CLI IS adaptive (correction), qwen gone machine-wide
-
-- **I was wrong about the kimi CLI, and the user was right.** Phase 2 concluded
-  from `kimi --help` (only `-m/--model`, no effort flag) that the native lane
-  could not do per-task effort. The official config docs say otherwise: *"Each
-  entry in the models table defines a model alias (the name used in
-  `default_model` or the `-m` flag), keyed by a unique name"* — and
-  `default_effort` is a **per-alias** field. Multiple aliases can therefore
-  point at one underlying model with different efforts.
-- **Implemented:** `~/.kimi-code/config.toml` now defines `k3-low`, `k3-high`,
-  `k3-max` — all `model = "k3"`, 1M context, differing only in
-  `default_effort`. `kimi doctor` validates. Registered as three distinct
-  identity cells so the scoreboard never merges them.
-- **Verified through the harness:** 6/6 PASS attempt 1, run exit 0 —
-  `lane-kimi-low` 18.7s, `lane-kimi-max` 19.7s, alongside mock/codex/claude/
-  kimiclaude. All four lanes are now adaptive; the routing rule's capability
-  table and the config header were corrected accordingly.
-- **Method lesson worth keeping:** `--help` is not the capability surface. The
-  flag list omitted a capability that the config schema exposes, and reading
-  only `--help` produced a confident wrong conclusion that would have cost a
-  lane. Check the config docs before declaring a capability absent.
-- **kimiclaude still retained** — effort is no longer the differentiator, so
-  the case now rests on plan metering and the pinned 1M context.
-- **qwen removed from `~/.kimi-code/config.toml`**: the
-  `[providers.qwen-token-plan]` block (which held a plaintext API key) and the
-  `qwen-token-plan/qwen3.8-max-preview` alias. Backup at
-  `config.toml.bak-preqwenremoval-20260727`. Machine-wide qwen count in live
-  configs is now zero; the only remaining mentions are deliberate
-  do-not-re-add notes.
-
-## Phase 4 — kimiclaude hard-wiped, committed, pushed
-
-- **kimiclaude deleted** (user decision) across 17 files. Removed: engine
-  blocks from the live config and `overlay/config/config.toml.example`;
-  `overlay/bin/claude-kimi` and the local `claude_kimi.py` launcher;
-  `~/.claude-kimi-config/` (361 KB); both `overlay/probes/kimiclaude-*.json`;
-  identity blocks; the `lane-kimiclaude` probe task; and 6 eval rows (56 → 50,
-  backup `runs.jsonl.bak-prekimiclaude-20260727`). Four lanes remain.
-- **History kept, lane gone** — same treatment as qwen. The 2026-07-22
-  kimiclaude entries in MODEL-NOTES stay, plus a new tombstone stating what was
-  given up (the lane was lighter on the request-metered Kimi plan; the 1M
-  context is NOT lost, the `k3-*` aliases also declare 1048576). If k3 cap
-  pressure ever binds, that is the argument for rebuilding — and it should be
-  re-measured, not assumed.
-- **overlay/rules and overlay/skills resynced** from the deployed `~/.claude`
-  copies, which had diverged across phases 1–3.
-- **Re-proved after removal:** 5/5 PASS attempt 1, run exit 0 — mock 0.1s,
-  claude/sonnet-low 10.7s, kimi/k3-max 13.3s, kimi/k3-low 17.7s,
-  codex/luna-low 22.0s.
-- **Test suite run against a pristine-HEAD worktree baseline**: 31 failed /
-  188 passed on both, **byte-identical failure sets** — zero regressions. The
-  31 are the known Windows failures this repo's CI already treats as
-  non-blocking. (Comparing sets rather than asserting suite-green is the
-  lesson MODEL-NOTES records from the 2026-07-10 steering-profiles run.)
-- **Secret-scanned before pushing** — the repo is public. No keys in the diff;
-  the one `ANTHROPIC_API_KEY` hit was a deletion line from the removed wrapper,
-  which read from a file and never held an inline key. Confirmed the qwen
-  plaintext key was never committed to any branch.
-- **Committed and pushed to `main`**: `c1457fd..736ef1d`, 21 files, +2026/-1068.
-
-## Next
-
-- The `.cmd` finding likely contaminates earlier Windows scoreboard rows on
-  codex/kimiclaude — treat pre-2026-07-27 first-try rates on those lanes as
-  depressed by a harness bug, not model quality.
-- Committed and pushed: 736ef1d on main.
+- Qwen purged: identity blocks, eval rows, and the leftover
+  `[providers.qwen-token-plan]` in `~/.kimi-code/config.toml` (which held a
+  plaintext key). Backups kept outside the repo.
+- Boss is role-defined (the session model), never model-named. Fable remains a
+  user-invoked red-phone advisor only.
+- Effort adaptive on every lane; the routing table names models only.
+- The scoreboard outranks the routing table — promoted to an explicit rule.
+- `templates/bakeoff-kit` imported from upstream; the tree matches upstream on
+  every shared file and `ringer.py` is byte-identical.

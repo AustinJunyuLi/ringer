@@ -8,8 +8,6 @@
 | claude | `--effort …` via engine_args | yes |
 | kimi (native CLI) | the `model` field — `k3-low`/`k3-high`/`k3-max` | yes |
 
-(`kimiclaude` also carried `--effort`; the lane was deleted later the same
-day — see the tombstone at the end of this section.)
 
 **Correction to an earlier reading of this file.** `kimi --help` shows only
 `-m/--model` and no effort flag, and I first concluded from that the native CLI
@@ -36,31 +34,7 @@ lives in the config schema, not the flag list, and a `--help` read alone
 produced a confident wrong conclusion that would have cost the lane. Check the
 docs for the config schema before declaring a capability absent.
 
-### kimiclaude — DELETED 2026-07-27 (tombstone; do not rebuild)
-
-The `kimiclaude` lane ran k3 through the Claude Code harness pointed at
-`api.kimi.com/coding`. Its entire reason for existing was that the native kimi
-CLI appeared unable to vary effort per task. Once the per-effort model aliases
-above proved otherwise, the lane was serving a model the `kimi` lane already
-serves, on a scarcer plan, through an extra wrapper — pure duplication. User
-called it and it was hard-wiped the same day.
-
-Removed: the `[engines.kimiclaude]` block from the live config and from
-`overlay/config/config.toml.example`; `overlay/bin/claude-kimi` and the local
-`claude_kimi.py` launcher; the `~/.claude-kimi-config/` isolated config dir
-(361 KB); `overlay/probes/kimiclaude-{capacity-s1,isolated-probe}.json`; the
-identity blocks; the `lane-kimiclaude` probe task; and 6 eval rows (56 → 50,
-backup at `runs.jsonl.bak-prekimiclaude-20260727`).
-
-What was given up, stated honestly: the wrapper pinned a 1M context budget for
-workers and subagents, and the lane was lighter on the request-metered Kimi
-plan per task than the native CLI. The `k3-*` aliases also declare
-`max_context_size = 1048576`, so the context is not lost; the plan-metering
-edge is. If k3 cap pressure ever becomes the binding constraint, that — not
-effort — is the argument for rebuilding, and it should be re-measured rather
-than assumed.
-
-Surviving lanes re-proved after removal: 5/5 PASS attempt 1, run exit 0 —
+Lane sweep on the four wired lanes: 5/5 PASS attempt 1, run exit 0 —
 mock 0.1s, claude/sonnet-low 10.7s, kimi/k3-max 13.3s, kimi/k3-low 17.7s,
 codex/luna-low 22.0s.
 
@@ -82,11 +56,9 @@ one-off flakes — read them before blaming a worker on this machine.
   message appears to be cut off — you said the contents must be 'exactly this
   one line:' but no line followed." Both were **correct behavior on the input
   they actually got.** Fix: every engine `bin` is now a native `.exe` —
-  codex points at the vendored `codex.exe` rather than `codex.cmd`, and the
-  Kimi wrapper was rewritten from `claude-kimi.cmd` to `claude_kimi.py` run by
-  `python.exe`. After the fix, codex and kimiclaude both passed attempt 1.
-  Suspect this retroactively contaminates earlier Windows rows on any
-  `.cmd`-backed lane.
+  codex points at the vendored `codex.exe` rather than `codex.cmd`. After the
+  fix, codex passed attempt 1. Suspect this retroactively contaminates earlier
+  Windows rows on any `.cmd`-backed lane.
 
 - **`./ringer.py demo` fails wholesale on Windows — the demo's own checks, not
   the workers.** Checks run through `create_subprocess_shell`, which is cmd.exe
@@ -110,11 +82,9 @@ one-off flakes — read them before blaming a worker on this machine.
 - **Full lane sweep after all fixes — 5/5 PASS, every one attempt 1**
   (`overlay/probes/win-lane-probe.json`, executed checks, run exit 0):
   mock 0.1s; claude/sonnet-low 14.6s; kimi/kimi-code-k3 16.5s;
-  kimiclaude/k3-low 20.4s; codex/gpt-5.6-luna-low 33.5s, 10.5k tokens.
+  codex/gpt-5.6-luna-low 33.5s, 10.5k tokens.
   Note kimi came in at 16.5s here against 188s (2 attempts) on the previous
-  sweep — one probe is far too thin to call the native CLI slow. (The
-  kimiclaude row is historical: that lane was deleted later the same day,
-  see the tombstone above.)
+  sweep — one probe is far too thin to call the native CLI slow.
 
 
 A running log of how models perform on real Ringer tasks, so engine and
@@ -730,135 +700,3 @@ math/features/fix/taste unchanged.
   and re-probe with a one-task manifest. The 2026-07-22 rebalance that routes
   bulk/bounded-research/diff-review through qwenclaude is ON HOLD until the
   key is fixed — those lanes fall back to sonnet (claude engine) meanwhile.
-
-## kimiclaude explore lane — 2026-07-22 (Fable boss)
-
-User supplied a Kimi Code Console key; Kimi officially supports Claude Code
-against https://api.kimi.com/coding/. New engine `kimiclaude`
-(`~/.local/bin/claude-kimi`), same membership cap as the kimi CLI.
-
-Endpoint facts (executed probes): tier = Allegretto+ (3 slugs served).
-**TRIPWIRE: `kimi-for-coding` and `-highspeed` are "K2.7 Coding" — the
-BANNED K2.7 family under new names. k3 ONLY on this endpoint.** k3 here is
-natively 1M context and formally declares think_efforts
-[low, high, max], default high. Effort A/B (primes task, ground truth 159
-by sieve): low = 2.2k thinking chars/909 tok/23s, max = 8.0k/3425/70s,
-both correct → output_config.effort HONORED, so per-task effort via
-engine_args ["--effort", ...] works (unlike qwenclaude, which has no knob).
-
-Capacity screen (same S1+research tasks/checks as the audition): **5/5
-PASS first-try**, k3@high: reasoning 36s, executor 42s (restraint check
-clean), docs 52s, persona 50s, research 256s. vs kimi-code k3-high on the
-identical tasks: 56s/62s/57s/(62s k3-max)/1224s — equal-or-faster on all
-five, research 4.8× faster. Caveats: one round, S1 sizes; kimi-code's
-heavy-task behavior (444–1648s real jobs) not yet compared; k3max-cell
-personality (sloppy-verify ban on unsupervised builds) assumed to carry
-over to k3@max until re-tested — the build ban stays regardless of harness.
-
-## kimi-code RETIRED — 2026-07-22 (user directive)
-
-kimi-code CLI hard-deleted (~/.kimi-code/bin/, 316MB); [engines.kimi]
-removed from ringer config. ALL k3 traffic now runs through kimiclaude
-(Claude Code harness). k3 joins the ADAPTIVE-effort family: Fable chooses
---effort low|high|max per task, passed explicitly on every dispatch — the
-old k3-high/k3-max cell split is now a per-dispatch judgment, not two
-lanes. Standing bans carried over: k3@max never types unsupervised builds;
-kimi-for-coding[-highspeed] (= K2.7) never routed. NOTE: ~/.kimi-code/
-retains sessions/skills/credentials/claude-code-key — only the binaries
-are gone, so the Kimi BOSS agent is inoperable; its ringer skill file
-remains on disk as inert history. Scoreboard note: historical kimi-code
-rows remain valid history; new k3 rows accrue under kimiclaude.
-
-## CORRECTION to the retirement entry above — 2026-07-22
-
-User clarified scope: kimi-code is retired from WORKER duty only. The CLI
-was reinstalled (official installer, v0.28.1, checksum-verified; OAuth
-session survived — boss smoke replied BOSS-OK) and remains solely the
-Kimi BOSS's interactive harness. The [engines.kimi] ringer lane stays
-deleted; all k3 worker traffic via kimiclaude, effort adaptive. Both
-claude-* wrappers now use isolated CLAUDE_CONFIG_DIR (auth-shadowing fix
-found on claude-qwen: main ~/.claude OAuth keychain token can shadow env
-auth).
-- RESOLUTION (same day): the 401 was NEVER the key or the model. The claude
-  binary's OAuth keychain login silently shadows ANTHROPIC_AUTH_TOKEN
-  (verified by local header capture: Bearer sk-ant-oat01-... hit the qwen
-  endpoint). Fix: claude-qwen now exports CLAUDE_CONFIG_DIR=~/.claude-qwen-config
-  (no OAuth session there → env token wins). Ringer probe PASS first-try,
-  33.9s. Lane RESTORED; the 2026-07-22 rebalance routing is back in force.
-  Lesson: a 401 through a wrapper harness implicates the harness's credential
-  precedence before the credential itself.
-
-## kimiclaude hardening — 2026-07-22 (Fable boss, post-incident)
-
-Applied the qwenclaude auth lessons to the kimi worker lane BEFORE it could
-fail the same way. Executed evidence:
-1. **Wire capture of BOTH wrappers** (local header sniffer, main ~/.claude
-   OAuth logged in throughout): kimi env sends x-api-key=sk-kimi-... with
-   NO authorization header; qwen env sends Bearer sk-sp-... (token-plan
-   key). No sk-ant-oat01 leakage on either lane — isolation verified at
-   the byte level, not by declaration.
-2. **Model-alias leak found and fenced**: api.kimi.com/coding silently
-   200s unknown slugs (a claude-haiku request is accepted and echoed) —
-   i.e. Claude Code's internal small-model calls were being served by an
-   undisclosed default, likely kimi-for-coding = K2.7 (banned).
-   claude-kimi now pins ANTHROPIC_SMALL_FAST_MODEL=k3: no traffic leaves
-   the sanctioned slug.
-3. **First ringer probe under the isolated config dir**: PASS first-try
-   23.4s at --effort low (also the first live use of adaptive effort on
-   the lane). Boss CLI verified intact (v0.28.1, binary present).
-Lesson to pair with the 401 one: an Anthropic-compatible endpoint that
-echoes your requested model name is NOT confirming what served it —
-capture-or-pin, never assume.
-
-## kimiqwen lane — 2026-07-22 (qwen through the Kimi Code harness)
-
-- New engine `[engines.kimiqwen]` (user decision: qwen gets a native worker
-  lane). Qwen models resolve through Kimi Code's `qwen-token-plan` provider
-  (OpenAI-compatible Token Plan endpoint) — the boss's own harness is now a
-  qwen worker path. Verified: 8.5s one-word probe, tool use OK (wire log
-  confirms upstream `qwen3.8-max-preview`), lane e2e first-try PASS 29.7s.
-- Credential-shadowing ruled out for this route by header capture: the only
-  request leaving the machine carried the exact token-plan key — no OAuth
-  token, no secondary auth calls. (Contrast: same-day qwenclaude 401 incident,
-  where the claude binary's ambient OAuth silently outranked the env token;
-  fixed there via isolated CLAUDE_CONFIG_DIR. Kimi Code has no equivalent
-  surface — provider credentials resolve only from config.toml, never shell
-  env.) Residual risk: key lives in BOTH ~/.qwen/settings.json and
-  ~/.kimi-code/config.toml — rotate in both places or it 401s.
-- kimi CLI's worker-harness retirement (2026-07-22 am) now reads: retired for
-  K3 traffic (workers on kimiclaude), active for qwen traffic (kimiqwen).
-
-## Harness follows the boss — 2026-07-22 (user directive, pm)
-
-Same-day reversal of the morning's kimi-engine retirement, refined into a
-symmetry rule: **each boss drives k3/qwen workers through its own native
-harness.** K3-bossed jobs: [engines.kimi] (k3/k3max, un-retired, e2e PASS
-16s) and [engines.kimiqwen] (qwen). Fable-bossed jobs: [engines.kimiclaude]
-(k3) and [engines.qwenclaude] (qwen). Anthropic/OpenAI models keep their own
-CLIs under either boss. Rationale captured from the user: native harness per
-boss keeps worker behavior consistent with the boss's own conventions, and
-the kimi-native path has no OAuth-shadowing surface for qwen (verified by
-header capture). Claude-side manifests should mirror this (Fable's skill
-lives in ~/.claude — not edited from here).
-- 2026-07-22 qwenclaude LIVE AUDITION #1 (code-review, heavy): final-integration
-  review of a 1209-line diff + 2 new modules, 15.6 min, PASS first-try.
-  Quality: ran the full 924-test suite read-only itself, verified test-pin
-  revert-sensitivity by reconstructing pre-edit text from diff minus-lines,
-  and surfaced 2 real P2 doc/doctrine gaps every earlier review round missed
-  (judge entailment rule missing for a newly core-visible field — likely
-  explains live reference-batch disputes; projection module vs stale contract
-  text). Report structure/citations clean. This was the heavy-load test the
-  lane needed post-auth-fix. Audition #2 (bulk verification sweep) pending.
-- 2026-07-22 qwenclaude LIVE AUDITION #2 (bulk docs, 9-lane re-stamp): work
-  product GOOD — 7/9 verification notes pass the real mechanical checker
-  (independent quote grounding, honest dispute adjudication; saks note
-  spot-checked: 79 quotes verified, open dispute correctly deferred to
-  operator). Lane table misleading: 6 "FAIL"s were the ORCHESTRATOR's broken
-  check (relative script path vs taskdir cwd). Notable worker behavior:
-  3 lanes that "passed" did so by copying the repo's scripts/ dir into their
-  taskdir so the broken path resolved — workers game broken checks rather
-  than report them; the boss must re-verify with the real command whenever a
-  check was wrong. Two real gaps (1 note not written, 1 missing page-cite
-  format) went to a 2-lane fix-forward. Orchestrator lesson (2nd occurrence
-  today): checks run with cwd=taskdir — EVERY path in a check must be
-  absolute, script paths included.
