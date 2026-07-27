@@ -1,0 +1,79 @@
+{
+  "run_name": "win-lane-probe-20260727",
+  "workdir": "C:\\Users\\ALi\\.ringer\\probe-work",
+  "max_parallel": 3,
+  "tasks": [
+    {
+      "key": "lane-mock",
+      "engine": "mock",
+      "task_type": "probe",
+      "timeout_s": 120,
+      "expect_files": [
+        "probe.txt"
+      ],
+      "spec": "You are the mock worker. You do not call a model and you do not reason: you parse MOCK_FILE blocks out of this spec and write each one to the named relative path inside your current working directory, then exit. Your only job here is to prove the harness path end to end \u2014 dispatch, deliverable, executed check, eval row \u2014 without spending a plan call on any provider. Write exactly one file, probe.txt, and create nothing else in the task directory.\n\nMOCK_FILE: probe.txt\nLANE OK mock\nMOCK_END",
+      "check": "bash -c 'grep -q \"LANE OK\" probe.txt || { echo \"FAIL: probe.txt missing or lacks LANE OK\"; ls -la; cat probe.txt 2>/dev/null; exit 1; }; echo \"PASS: $(cat probe.txt)\"'",
+      "verified": "mock engine dispatched, wrote its declared deliverable, and the executed check read it back."
+    },
+    {
+      "key": "lane-codex",
+      "engine": "codex",
+      "model": "gpt-5.6-luna",
+      "task_type": "probe",
+      "timeout_s": 600,
+      "engine_args": [
+        "-c",
+        "model_reasoning_effort=low"
+      ],
+      "expect_files": [
+        "probe.txt"
+      ],
+      "spec": "Write a file named probe.txt in your current working directory. Its entire contents must be exactly this one line:\nLANE OK codex\nDo not create any other file. Do not add commentary to probe.txt.",
+      "check": "bash -c 'grep -q \"LANE OK codex\" probe.txt || { echo \"FAIL: probe.txt missing or does not contain LANE OK codex\"; ls -la; cat probe.txt 2>/dev/null; exit 1; }; echo \"PASS: $(cat probe.txt)\"'",
+      "verified": "codex lane dispatched on the Roaming-npm shim, wrote the declared deliverable, executed check passed."
+    },
+    {
+      "key": "lane-claude",
+      "engine": "claude",
+      "model": "sonnet",
+      "task_type": "probe",
+      "timeout_s": 600,
+      "engine_args": [
+        "--effort",
+        "low"
+      ],
+      "expect_files": [
+        "probe.txt"
+      ],
+      "spec": "Write a file named probe.txt in your current working directory. Its entire contents must be exactly this one line:\nLANE OK claude\nDo not create any other file. Do not add commentary to probe.txt.",
+      "check": "bash -c 'grep -q \"LANE OK claude\" probe.txt || { echo \"FAIL: probe.txt missing or does not contain LANE OK claude\"; ls -la; cat probe.txt 2>/dev/null; exit 1; }; echo \"PASS: $(cat probe.txt)\"'",
+      "verified": "claude lane dispatched headless with skip-permissions, wrote the declared deliverable, executed check passed."
+    },
+    {
+      "key": "lane-kimi-low",
+      "engine": "kimi",
+      "model": "k3-low",
+      "task_type": "probe",
+      "timeout_s": 600,
+      "expect_files": [
+        "probe.txt"
+      ],
+      "spec": "Write a file named probe.txt in your current working directory. Its entire contents must be exactly this one line:\nLANE OK kimi-low\nDo not create any other file. Do not add commentary to probe.txt.",
+      "check": "bash -c 'grep -q \"LANE OK kimi-low\" probe.txt || { echo \"FAIL: probe.txt missing or does not contain LANE OK kimi-low\"; ls -la; cat probe.txt 2>/dev/null; exit 1; }; echo \"PASS: $(cat probe.txt)\"'",
+      "verified": "native kimi CLI dispatched at low effort via the k3-low alias; executed check passed."
+    },
+    {
+      "key": "lane-kimi-max",
+      "engine": "kimi",
+      "model": "k3-max",
+      "task_type": "probe",
+      "timeout_s": 600,
+      "expect_files": [
+        "probe.txt"
+      ],
+      "spec": "Write a file named probe.txt in your current working directory. Its entire contents must be exactly this one line:\nLANE OK kimi-max\nDo not create any other file. Do not add commentary to probe.txt.",
+      "check": "bash -c 'grep -q \"LANE OK kimi-max\" probe.txt || { echo \"FAIL: probe.txt missing or does not contain LANE OK kimi-max\"; ls -la; cat probe.txt 2>/dev/null; exit 1; }; echo \"PASS: $(cat probe.txt)\"'",
+      "verified": "native kimi CLI dispatched at max effort via the k3-max alias; executed check passed."
+    }
+  ]
+}

@@ -1,5 +1,122 @@
 # Model notes — how workers actually perform
 
+## 2026-07-27 — Effort-control capability audit: ALL FOUR LANES ARE ADAPTIVE
+
+| Lane | Per-dispatch effort control | Adaptive per task? |
+|---|---|---|
+| codex | `-c model_reasoning_effort=…` via engine_args | yes |
+| claude | `--effort …` via engine_args | yes |
+| kimi (native CLI) | the `model` field — `k3-low`/`k3-high`/`k3-max` | yes |
+
+(`kimiclaude` also carried `--effort`; the lane was deleted later the same
+day — see the tombstone at the end of this section.)
+
+**Correction to an earlier reading of this file.** `kimi --help` shows only
+`-m/--model` and no effort flag, and I first concluded from that the native CLI
+could not be adaptive — that effort was stuck in the global `[thinking] effort`
+and varying it per task would race under parallel runs. **Wrong, and the docs
+say so plainly:** in Kimi Code's config, *"Each entry in the models table
+defines a model alias (the name used in `default_model` or the `-m` flag),
+keyed by a unique name"*, and `default_effort` is a **per-alias** field. So
+several aliases can point at the same underlying model with different efforts,
+and `-m` then selects the effort cell per dispatch.
+
+Implemented: `~/.kimi-code/config.toml` now defines `k3-low`, `k3-high`,
+`k3-max`, all `model = "k3"`, `max_context_size = 1048576`, differing only in
+`default_effort`. `kimi doctor` validates. Registered as three distinct
+scoreboard cells (displays `Kimi K3 · low|high|max`) so the effort cells never
+merge — same convention as `k3max`.
+
+Verified through the harness, not just from a shell: `lane-kimi-low` PASS
+attempt 1 (18.7s) and `lane-kimi-max` PASS attempt 1 (19.7s) in a 6/6 sweep of
+`overlay/probes/win-lane-probe.json`, run exit 0.
+
+**Method lesson:** `--help` is not the capability surface. Kimi's effort control
+lives in the config schema, not the flag list, and a `--help` read alone
+produced a confident wrong conclusion that would have cost the lane. Check the
+docs for the config schema before declaring a capability absent.
+
+### kimiclaude — DELETED 2026-07-27 (tombstone; do not rebuild)
+
+The `kimiclaude` lane ran k3 through the Claude Code harness pointed at
+`api.kimi.com/coding`. Its entire reason for existing was that the native kimi
+CLI appeared unable to vary effort per task. Once the per-effort model aliases
+above proved otherwise, the lane was serving a model the `kimi` lane already
+serves, on a scarcer plan, through an extra wrapper — pure duplication. User
+called it and it was hard-wiped the same day.
+
+Removed: the `[engines.kimiclaude]` block from the live config and from
+`overlay/config/config.toml.example`; `overlay/bin/claude-kimi` and the local
+`claude_kimi.py` launcher; the `~/.claude-kimi-config/` isolated config dir
+(361 KB); `overlay/probes/kimiclaude-{capacity-s1,isolated-probe}.json`; the
+identity blocks; the `lane-kimiclaude` probe task; and 6 eval rows (56 → 50,
+backup at `runs.jsonl.bak-prekimiclaude-20260727`).
+
+What was given up, stated honestly: the wrapper pinned a 1M context budget for
+workers and subagents, and the lane was lighter on the request-metered Kimi
+plan per task than the native CLI. The `k3-*` aliases also declare
+`max_context_size = 1048576`, so the context is not lost; the plan-metering
+edge is. If k3 cap pressure ever becomes the binding constraint, that — not
+effort — is the argument for rebuilding, and it should be re-measured rather
+than assumed.
+
+Surviving lanes re-proved after removal: 5/5 PASS attempt 1, run exit 0 —
+mock 0.1s, claude/sonnet-low 10.7s, kimi/k3-max 13.3s, kimi/k3-low 17.7s,
+codex/luna-low 22.0s.
+
+## 2026-07-27 — Windows reinstall: two HARNESS bugs, zero model failures
+
+Ringer reinstalled on the Windows laptop (econ-phd-04), qwen lanes retired.
+Everything that failed on day one was the harness or the check. **No model
+underperformed.** Both findings below are permanent Windows constraints, not
+one-off flakes — read them before blaming a worker on this machine.
+
+- **A `.cmd` shim as an engine `bin` silently DROPS any argument containing a
+  newline.** CreateProcess routes `.cmd` through cmd.exe, which discards the
+  whole argument — no error, no warning. Probed directly with
+  `create_subprocess_exec` and the arg `"line one:\nPAYLOAD\nline three"`:
+  via `.cmd` the child received `[]`; via `.exe` it received the string
+  intact. Consequence: a multi-line `{spec}` arrives as *nothing*, and the
+  worker answers a truncated prompt. Observed as codex writing an empty
+  `probe.txt` ("Created probe.txt with one empty line") and k3 replying "your
+  message appears to be cut off — you said the contents must be 'exactly this
+  one line:' but no line followed." Both were **correct behavior on the input
+  they actually got.** Fix: every engine `bin` is now a native `.exe` —
+  codex points at the vendored `codex.exe` rather than `codex.cmd`, and the
+  Kimi wrapper was rewritten from `claude-kimi.cmd` to `claude_kimi.py` run by
+  `python.exe`. After the fix, codex and kimiclaude both passed attempt 1.
+  Suspect this retroactively contaminates earlier Windows rows on any
+  `.cmd`-backed lane.
+
+- **`./ringer.py demo` fails wholesale on Windows — the demo's own checks, not
+  the workers.** Checks run through `create_subprocess_shell`, which is cmd.exe
+  here, and the demo ships POSIX checks (`test "$(cat x)" = "y" || { ...; }`).
+  cmd.exe answers `'{' is not recognized as an internal or external command`.
+  All three demo workers had written their files correctly. Recorded as three
+  FAIL rows for GPT-5.6 Sol that the model did not earn — **annotated here so
+  the scoreboard is read with them discounted.** Fix for all local manifests:
+  wrap every check as `bash -c '...'`; Git Bash is on PATH and handles the
+  upstream templates' POSIX syntax unchanged.
+
+- **claude lane: was an EXPIRED OAUTH SESSION, now resolved.** For part of the
+  session `claude.exe --model sonnet -p` returned `Failed to authenticate:
+  OAuth session expired and could not be refreshed`, reproducible outside
+  Ringer entirely while the live app session kept working — i.e. the headless
+  CLI path can be unauthenticated while the GUI looks fine. Re-auth fixed it
+  and the lane passed attempt 1. **The 2 FAIL rows it recorded before the fix
+  are an auth artifact and say nothing about Sonnet — discount them.** First
+  thing to check when a Claude-lane worker fails instantly with no tokens.
+
+- **Full lane sweep after all fixes — 5/5 PASS, every one attempt 1**
+  (`overlay/probes/win-lane-probe.json`, executed checks, run exit 0):
+  mock 0.1s; claude/sonnet-low 14.6s; kimi/kimi-code-k3 16.5s;
+  kimiclaude/k3-low 20.4s; codex/gpt-5.6-luna-low 33.5s, 10.5k tokens.
+  Note kimi came in at 16.5s here against 188s (2 attempts) on the previous
+  sweep — one probe is far too thin to call the native CLI slow. (The
+  kimiclaude row is historical: that lane was deleted later the same day,
+  see the tombstone above.)
+
+
 A running log of how models perform on real Ringer tasks, so engine and
 model choices are made on evidence instead of vibes. The raw numbers now
 live in the local eval log (`~/.ringer/runs.jsonl`); run `./ringer.py models`

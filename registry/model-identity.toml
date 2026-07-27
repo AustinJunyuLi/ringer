@@ -122,77 +122,11 @@ confidence = "verified"
 source = "https://www.kimi.com/code"
 last_verified = 2026-07-20
 
-# HISTORICAL (2026-07-24): the qwen engines below were deleted from the
-# fleet (Token Plan cap cut, full burn). Blocks retained ONLY so the
-# scoreboard can label historical runs.jsonl rows — do not wire them.
-[engines.qwen]
-harness = "omp"
-access = "ModelStudio token plan"
-default_model_key = "qwen-token-plan/qwen3.8-max-preview"
-
-[engines.qwen.models."qwen-token-plan/qwen3.8-max-preview"]
-display = "Qwen 3.8 Max Preview"
-lab = "Alibaba (Qwen)"
-confidence = "verified"
-source = "https://qwen.ai"
-last_verified = 2026-07-20
-
-[engines.qwencode]
-harness = "Qwen Code CLI"
-access = "ModelStudio token plan"
-default_model_key = "qwen3.8-max-preview"
-# Slugs come from ~/.qwen/settings.json modelProviders (ModelStudio Token
-# Plan endpoint). Third-party models (GLM, DeepSeek, Kimi, MiniMax) are
-# served by ModelStudio under their own lineage-bearing slugs.
-
-[engines.qwencode.models."qwen3.8-max-preview"]
-display = "Qwen 3.8 Max Preview"
-lab = "Alibaba (Qwen)"
-confidence = "verified"
-source = "https://www.alibabacloud.com/help/en/model-studio/models"
-last_verified = 2026-07-21
-
-[engines.qwencode.models."qwen3.7-plus"]
-display = "Qwen 3.7 Plus"
-lab = "Alibaba (Qwen)"
-confidence = "verified"
-source = "https://www.alibabacloud.com/help/en/model-studio/models"
-last_verified = 2026-07-21
-
-[engines.qwencode.models."qwen3.6-flash"]
-display = "Qwen 3.6 Flash"
-lab = "Alibaba (Qwen)"
-confidence = "verified"
-source = "https://www.alibabacloud.com/help/en/model-studio/models"
-last_verified = 2026-07-21
-
-[engines.qwencode.models."glm-5.2"]
-display = "GLM 5.2"
-lab = "Z.ai (Zhipu AI)"
-confidence = "verified"
-source = "ModelStudio Token Plan catalog; same artifact family as OpenRouter z-ai/glm-5.2"
-last_verified = 2026-07-21
-
-[engines.qwencode.models."deepseek-v4-pro"]
-display = "DeepSeek V4 Pro"
-lab = "DeepSeek"
-confidence = "verified"
-source = "https://www.alibabacloud.com/help/en/model-studio/models"
-last_verified = 2026-07-21
-
-[engines.qwencode.models."kimi-k2.7-code"]
-display = "Kimi K2.7 Code"
-lab = "Moonshot AI"
-confidence = "verified"
-source = "ModelStudio Token Plan catalog; same artifact family as OpenRouter moonshotai/kimi-k2.7-code"
-last_verified = 2026-07-21
-
-[engines.qwencode.models."MiniMax-M2.5"]
-display = "MiniMax M2.5"
-lab = "MiniMax"
-confidence = "verified"
-source = "https://www.alibabacloud.com/help/en/model-studio/models"
-last_verified = 2026-07-21
+# REMOVED (2026-07-27): the qwen engine blocks (qwen, qwencode, kimiqwen)
+# were deleted here. They had been retained only to label historical
+# runs.jsonl rows; those rows were purged from the eval log the same day,
+# so the labelling reason is gone. Qwen is off this fleet — do not re-add.
+# The evidence trail for why lives in docs/MODEL-NOTES.md.
 
 # Claude Code CLI lane (added 2026-07-21, K3-boss fleet). Aliases verified
 # against `claude --help` v2.1.216: opus/sonnet/fable aliases accepted;
@@ -232,6 +166,20 @@ confidence = "unverified"
 source = "claude --help v2.1.216 (local)"
 last_verified = 2026-07-21
 
+# Local mock worker — no model, no network. Registered so harness smoke rows
+# label as a deliberate non-model lane instead of "(unattributed legacy rows)".
+[engines.mock]
+harness = "ringer engines/mock_worker.py"
+access = "local, no credentials"
+default_model_key = "mock"
+
+[engines.mock.models."mock"]
+display = "Mock worker (no model)"
+lab = "n/a"
+confidence = "verified"
+source = "ringer engines/mock_worker.py"
+last_verified = 2026-07-27
+
 # Alias of k3 pinned to max thinking effort (added 2026-07-21). Same trained
 # artifact as kimi-code/k3 — display kept distinct ("Kimi K3 Max") so
 # scoreboard rows for the two effort cells don't merge; the kimi harness has
@@ -243,19 +191,29 @@ confidence = "verified"
 source = "https://www.kimi.com/code"
 last_verified = 2026-07-21
 
-# [engines.kimiqwen] — Qwen routed through the Kimi Code harness (added
-# 2026-07-22, user decision): same trained artifact as the qwenclaude/qwencode
-# lanes, different harness+route. Kimi Code provider "qwen-token-plan"
-# (OpenAI-compatible Token Plan endpoint; credential shadowing ruled out by
-# header capture 2026-07-22).
-[engines.kimiqwen]
-harness = "Kimi Code CLI"
-access = "ModelStudio token plan"
-default_model_key = "qwen-token-plan/qwen3.8-max-preview"
+# Per-effort k3 aliases (added 2026-07-27). Kimi Code's models table keys ARE
+# the -m aliases and default_effort is per-alias, so these three point at the
+# same underlying "k3" with different effort — giving the native CLI lane
+# per-dispatch adaptive effort despite having no --effort flag. Displays kept
+# distinct so the scoreboard does not merge the three effort cells, same
+# convention as k3max above. Defined in ~/.kimi-code/config.toml.
+[engines.kimi.models."k3-low"]
+display = "Kimi K3 · low"
+lab = "Moonshot AI"
+confidence = "verified"       # live dispatch 2026-07-27
+source = "~/.kimi-code/config.toml alias -> model k3, default_effort=low"
+last_verified = 2026-07-27
 
-[engines.kimiqwen.models."qwen-token-plan/qwen3.8-max-preview"]
-display = "Qwen 3.8 Max Preview"
-lab = "Alibaba (Qwen)"
-confidence = "verified"       # live probe through kimi harness 2026-07-22 (8.5s reply, tool use OK)
-source = "local probe via kimi -m qwen-token-plan/qwen3.8-max-preview"
-last_verified = 2026-07-22
+[engines.kimi.models."k3-high"]
+display = "Kimi K3 · high"
+lab = "Moonshot AI"
+confidence = "verified"
+source = "~/.kimi-code/config.toml alias -> model k3, default_effort=high"
+last_verified = 2026-07-27
+
+[engines.kimi.models."k3-max"]
+display = "Kimi K3 · max"
+lab = "Moonshot AI"
+confidence = "verified"       # live dispatch 2026-07-27
+source = "~/.kimi-code/config.toml alias -> model k3, default_effort=max"
+last_verified = 2026-07-27

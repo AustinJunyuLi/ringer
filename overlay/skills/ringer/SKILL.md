@@ -59,7 +59,7 @@ description: >-
    asks.
 
 Ringer runs manifest tasks in parallel across cheap CLI workers (codex,
-kimi, kimiclaude, claude — lanes wired in `~/.config/ringer/config.toml`)
+kimi, claude, mock — lanes wired in `~/.config/ringer/config.toml`)
 and verifies every task by **executing a
 check command** — exit 0 is the only PASS. Failed tasks are retried once
 with the check's actual failure output injected into the retry prompt. You —
@@ -224,7 +224,7 @@ doesn't re-run the experiment.
 
 **Ringer is the harness; the cell is a manifest field.** Every worker runs
 through a wired engine (`[engines.<name>]` blocks in config.toml: codex,
-kimi, kimiclaude, claude) with
+kimi, claude, mock) with
 `model` + `engine_args` naming the exact cell. This holds even when someone — including the user, in the
 heat of a run — says to "call the model directly" or reach for its own CLI:
 the harness is what provides the sandbox, raw logs, token counts, and

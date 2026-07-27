@@ -178,7 +178,6 @@ The `overlay/` directory is the operator's configuration layer — the pieces th
 
 | Overlay path | Deploy to | Purpose |
 |---|---|---|
-| `overlay/bin/claude-kimi` | Somewhere on your `$PATH` (e.g. `~/.local/bin/`) | Wrapper script for the Kimi worker lane (advanced; skip for now) |
 | `overlay/config/config.toml.example` | Reference only — do not copy wholesale | Full multi-lane engine wiring, for when you add lanes beyond step 2 |
 | `overlay/rules/model-routing.md` | `~/.claude/rules/model-routing.md` | The routing table the boss reads when choosing workers |
 | `overlay/skills/ringer/SKILL.md` | `~/.claude/skills/ringer/SKILL.md` | The orchestrator playbook the boss loads |
@@ -200,7 +199,7 @@ Everything above runs on Claude alone. Add the lanes below **when you outgrow on
 
 **The OpenAI lane (GPT family).** You need an OpenAI plan that includes Codex CLI access. Install the Codex CLI and sign in with its OAuth login (`codex login`), then enable the codex engine block in `~/.config/ringer/config.toml`. Validate with a probe before routing real work.
 
-**The Kimi lane (K3).** You need a Kimi Code membership and an API key from the Kimi Code Console. Store the key in a file with `0600` permissions (readable only by you — e.g. `chmod 600 <keyfile>`), deploy the `overlay/bin/claude-kimi` wrapper script onto your `$PATH`, and enable the corresponding engine block in your config.
+**The Kimi lane (K3).** You need a Kimi Code membership and an API key from the Kimi Code Console. Store the key in a file with `0600` permissions (readable only by you — e.g. `chmod 600 <keyfile>`), sign in with `kimi login`, and enable the `kimi` engine block in your config. Effort is selected per task through per-effort model aliases in `~/.kimi-code/config.toml` (`k3-low` / `k3-high` / `k3-max`), since the CLI has no `--effort` flag.
 
 The wrapper deserves a sentence of explanation, because it is a genuinely useful trick: it points the Claude Code harness — the same tool you already know — at Kimi's Anthropic-compatible endpoint, using its own isolated configuration directory. That means **one familiar harness for every worker**, regardless of whose model is behind it; **an isolated config** so the worker's session never tangles with your own; and **full transcripts** of every worker session saved to disk, which turns "the worker stalled" mysteries into readable evidence. One crew uniform, many crews.
 
@@ -252,7 +251,6 @@ fable-ringer/
 │   ├── MODEL-NOTES.md     # The human judgment layer on top of the scoreboard
 │   └── …                  # Steering docs, taxonomy, screenshots
 ├── overlay/               # The operator's configuration layer
-│   ├── bin/               #   claude-kimi wrapper script
 │   ├── config/            #   config.toml.example (engine wiring)
 │   ├── rules/             #   model-routing.md — this operator's routing table
 │   ├── skills/ringer/     #   SKILL.md — the orchestrator playbook

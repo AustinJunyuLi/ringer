@@ -205,13 +205,3 @@ model_default = "sonnet"
 args_template = ["{access_args}", "--model", "{model}", "{engine_args}", "-p", "{spec}"]
 sandbox_args = ["--dangerously-skip-permissions"]
 full_access_args = []
-
-# Kimi K3 via the Claude Code harness. The endpoint supports
-# output_config.effort; pass the desired effort through engine_args on each
-# dispatch. K3 provides a native 1M context window.
-[engines.kimiclaude]
-bin = "<PATH-TO>/.local/bin/claude-kimi"
-model_default = "k3"
-args_template = ["{access_args}", "--model", "{model}", "{engine_args}", "-p", "{spec}"]
-sandbox_args = ["--dangerously-skip-permissions"]
-full_access_args = []
