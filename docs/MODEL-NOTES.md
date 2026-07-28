@@ -1,5 +1,59 @@
 # Model notes — how workers actually perform
 
+## 2026-07-28 — effort attribution fixed; the table becomes advisory priors
+
+**Why this entry exists at all: a stale file silently reverted a measured
+decision.** The 07-27 deploy was authored on the Windows laptop against a
+MODEL-NOTES that ended at 07-22. Everything below from 07-24 and 07-25 was
+missing from it, so the deployed routing table reproduced the pre-07-25 state
+and re-justified k3 on the feature lane with the "parsimonious diffs suit
+feature work" premise — which the 07-25 bakeoff in this very file records as
+FALSIFIED. Nobody decided this on 07-27. The 07-24/07-25 entries have now been
+restored here (they had survived only in an unpushed local checkout).
+
+Resolved after a Fable red-phone consult (`fable-advice-routing-divergence`,
+PASS, 125s). Fable's framing, adopted: leaving the deployed table was the
+FORCED move, not the neutral one — and a decision reached by blind comparison
+IS evidence, so its fragility indicted the storage, not the reasoning. User
+decisions: (1) the table becomes **advisory priors, not assignments** —
+keeping the evidence, dropping the pin, which dissolves the dispute rather
+than re-litigating it; (2) **model is adaptive too**, not just effort;
+(3) **the k3@max ban is lifted in full**, replaced by a watch item.
+
+**Effort attribution — FIXED** (`effort-attribution-fix`, terra @ high).
+`effective_reasoning_effort_from_command` matched only the codex
+`model_reasoning_effort=` form, so the other two lanes logged null: codex 126
+rows attributed / 7 null, claude **0 / 64**, kimi **0 / 112**. Routing already
+treated the cell = (model × effort) as the unit of analysis while 176 live
+rows carried a null where that unit goes. Now parses `--effort <v>`,
+`--effort=<v>`, and the kimi aliases (`k3-low|high|max`, `kimi-code/` prefix,
+legacy `k3max`), and **deliberately refuses to guess on a bare `k3`** — that
+takes whatever `default_effort` the config gives it, and a fabricated value
+would corrupt the board worse than a null does. Historical nulls left null.
+15 lines, one function, codex path untouched.
+
+This mattered more under decision (2): with the model pinned per shape you
+could partly infer effort from the lane. Once BOTH float, an unrecorded
+variable is an unlearnable one. New standing rule: **a routing variable the
+log cannot record is not yet part of doctrine.** Note the 07-27 audit
+verified the actuator without the sensor — it confirmed each lane *dispatches*
+at a chosen effort, never that the log *captures* which effort ran. Same class
+of gap as accepting a worker's claim without executing the check.
+
+**DISCOUNT THIS FAIL — the check was wrong, not the worker.** `effort-regex`
+is recorded FAIL, 2 attempts, 78,163 tokens. The worker's change was correct
+on attempt 1: the acceptance suite I authored passes 19/19, and the only
+failing test in the wider suite is `test_contributors`
+("README.md has no '## Contributors' section"), which **fails identically on
+unmodified HEAD** — verified by stashing the diff. My check demanded the whole
+suite green on a repo that ships with a pre-existing unrelated failure, so it
+failed the task for something the worker neither caused nor could fix inside
+its ownership boundary, and the retry doubled the burn. Terra's row should be
+read as a first-try PASS. Lesson, and it is the SECOND time this exact class
+shows up in this file (see the 07-25 review-lane format contamination):
+**scope a check to the diff, never to the whole suite, unless the suite is
+known green at HEAD — baseline it first.**
+
 ## 2026-07-27 — Effort-control capability audit: ALL FOUR LANES ARE ADAPTIVE
 
 | Lane | Per-dispatch effort control | Adaptive per task? |
@@ -700,3 +754,252 @@ math/features/fix/taste unchanged.
   and re-probe with a one-task manifest. The 2026-07-22 rebalance that routes
   bulk/bounded-research/diff-review through qwenclaude is ON HOLD until the
   key is fixed — those lanes fall back to sonnet (claude engine) meanwhile.
+
+## 2026-07-24 — qwen deleted; three evidence runs refill the lanes (Fable boss)
+
+**Qwen deleted from the fleet (user directive, full burn, no fallbacks).**
+Trigger: ModelStudio Token Plan cut qwen3.8-max usage — the cap-arbitrage
+rationale for every qwen lane died with it. Removed: ringer engines
+qwen/qwencode/qwenclaude/kimiqwen, shims ~/.local/bin/{qwen,claude-qwen},
+~/.qwen/, the qwen-token-plan provider in ~/.kimi-code/config.toml.
+DeepSeek explore candidate died with the channel (user chose full burn
+over repointing). Final ledger: qwen's clean sheets were all S1-sized;
+real-work record was docs 4/21 with 6 timeouts (qwencode-harness-era),
+and qwenclaude 401'd before ever carrying volume. Nothing irreplaceable.
+
+**bulk-lane-bakeoff (8 tasks, 2 scenarios × 4 cells, executed validators):
+8/8 first-try.** sonnet-low 34–36s; terra-xhigh 77–79s / 29–32k tok;
+luna-xhigh 92–138s / 27–37k; luna-max 65–183s / 25–43k (no quality gain
+over xhigh). Artifact inspection: luna's parser used Decimal+ROUND_HALF_UP
+and handled leading-dot floats (more robust than sonnet's float+round);
+sonnet VIOLATED the one-deliverable contract in BOTH tasks by writing
+quality_reports/session_logs/ into the taskdirs — the claude engine runs
+on the main ~/.claude config, so the user's global session-logging rule
+leaks into workers (opus did it too in the math rundown; engine-level,
+not model-level; not fixable via CLAUDE_CONFIG_DIR without breaking
+OAuth). Routing outcome: bulk/mechanical primary → luna-xhigh (PROBATION,
+sonnet standing backup until 3+ real bulk passes). Luna scoreboard: now
+3 lifetime tasks, first-try 100%.
+
+**math-partner-rundown (sol-max authors + tamper-tested verifier; k3-max
+vs opus-max blind solve).** Author: sol-max PASS on attempt 2 (attempt-1
+miss was a q1.md length nit; tamper test held — corrupting either answer
+fails verify.py), 127k tok, 723s; produced a log-quartic integral and a
+constrained-permutation count, both verified by independent stdlib/mpmath
+recomputation. opus-max: PASS attempt 1, 429s — both answers matched
+ground truth to full float precision (q1 to 15+ digits, q2 exact
+11658198), self-validated via two independent implementations (incl. two
+compiled C programs for q2). k3-max: DOUBLE-FAIL, 1182s total — both
+attempts read q1.md+q2.md, wrote NOTHING (no solutions, no derivation, no
+"couldn't solve" admission the spec explicitly allowed), exited rc=0.
+Transcripts: 5/4 assistant msgs, 2 tool uses each. Both attempts pre-date
+the wrapper rewire — not a harness confound. CONSEQUENCE: the k3@max
+unsupervised ban BROADENED from builds to all deliverable task shapes;
+math re-derivation partner = opus (replacing deleted qwen).
+
+**k3-harness-efficiency A/B (3 identical tasks × kimi CLI vs kimiclaude,
+both effort high, executed checks): 6/6 first-try; kimiclaude wins
+everything measurable.** Wallclock 2.2–3.3× faster (37/35/65s vs
+103/77/215s); raw token traffic 2.3–2.9× lower (47k/48k/102k vs
+136k/137k/236k, mined from both harnesses' own wire logs); requests/task
+2/2/4 vs 6/6/10 — decisive on a REQUEST-metered plan (docs: 300–1200
+req/5h, ≤30 concurrent). The kimi-docs "native CLI is more
+token-efficient" claim only holds if cache reads are discounted to ~0
+AND uncached input dominates the metering (kimi CLI's uncached input was
+smaller on 2 of 3 tasks; endpoint does no caching for the Claude harness
+— cache-write 0, system prompt re-sent uncached each request). Metering
+formula itself: unverified. Everything verifiable favors kimiclaude.
+
+**claude-kimi wrapper rewired per kimi.com/code/docs** (third-party
+integration page): full alias pinning (ANTHROPIC_DEFAULT_FABLE/OPUS/
+SONNET/HAIKU_MODEL + CLAUDE_CODE_SUBAGENT_MODEL → k3 — closes the latent
+K2.7 silent-alias leak; transcript audit: 182/183 historical requests
+were k3, none banned) + ANTHROPIC_MODEL=k3[1m] +
+CLAUDE_CODE_MAX_CONTEXT_TOKENS=1000000 (endpoint /v1/models confirms k3
+context_length 1048576; without the pin Claude Code compacts at its
+default window). Rewire probe: PASS first-try 50.7s, all requests k3.
+1M budget behaviorally unverified until a long task exercises it.
+
+## 2026-07-24 pm — fable-ringer-page-update (publish job, Fable boss)
+
+README v4 + overlay sync published (commit f0f0374). k3-high (docs/taste):
+pass on attempt 2 — attempt-1 failure was MY check's per-line qwen-context
+grep failing honest multi-line prose (check fixed to paragraph context;
+"strict on substance, tolerant on format" lesson re-learned). luna-xhigh
+(mechanical overlay sync, FIRST real bulk task on probation): pass on
+attempt 2, 179k tok, 1053s — four content deliverables verified faithful
+(opus gate: byte-level diffs), but DELETIONS.txt named an INVENTED repo
+path and omitted both real qwenclaude files; slipped a substring-floor
+check, caught by boss spot-check. Probation ledger: bulk first-try 0/1,
+one fabricated-detail ding on a list deliverable. Content work was clean —
+keep luna primary, but checks on luna list-outputs must enumerate exactly.
+opus-high publish gate: first-try, 482s, exemplary — byte-diffed every
+file, re-derived every count, verdict APPROVE with 1 BLOCKER (the
+DELETIONS list) + 12 enumerated minors, all boss-applied; also caught that
+the machine's own config carried the stale narrow k3@max ban comment
+(fixed locally same day). Gate's repo-wide qwen sweep found 3 stale files
+outside worker scope (SKILL.md lane lists, publish kit, registry) — scope
+manifests from a `git grep`, not memory, next time.
+
+## 2026-07-24 — fable-ringer README rewrite job (docs lane)
+
+- **k3 (kimiclaude, effort high), docs**: drafted a 3,700-word public README
+  first-try PASS (275s); applied a 3-fix review round where BOTH logged FAILs
+  were CHECK BUGS, not model failures — the check demanded the literal phrase
+  "exit code 0" while the worker correctly wrote "exits with code 0". Work was
+  verified correct by the corrected check. **Annotate: the 2 k3/docs FAILs in
+  runs.jsonl for run fable-ringer-readme-20260724T144354Z are check bugs.**
+- **k3 (kimiclaude, effort high), docs (sanitize model-routing.md)**: retry
+  also a CHECK BUG — banned-marker 'omp' substring-matched "prompts"/"compile"/
+  "decompose"; worker diagnosed the checker itself and reworded to pass.
+  Lesson: word-boundary regexes for short banned markers.
+- **luna-xhigh (codex), docs/bulk (sanitize config+wrapper)**: first-try PASS,
+  219s, 46.6k tokens. Boss-verified zero functional drift (parsed-TOML value
+  diff clean; wrapper functional lines byte-identical). Bulk-lane probation +1
+  (real task). 
+- **sonnet (claude, effort high), code-review (gating)**: first-try PASS,
+  372s. High-quality evidence-citing review: caught that the README quickstart
+  routed readers into dev-note-saturated config.toml.example (blocker), a
+  fabricated ~/.ringer/probes deploy path carried over from the old README,
+  and the exit-0 oversimplification vs Verifier.verify(). Strong gating-review
+  data point for sonnet.
+- **k3 (kimiclaude, effort high), docs (sanitize SKILL.md)**: PASS attempt 2,
+  444s. Retry cause was again check bluntness (whole-word ban on 'deleted'
+  collided with worktree doctrine 'worktree DELETED'); worker made the minimal
+  doctrine-preserving reword and self-audited with a full marker grep. Good
+  failure-context handling.
+
+## corp-actions-beyond-dividends — 2026-07-24/25 (Fable boss, 6-lane research + 2-reviewer round 2)
+
+- **opus·max (claude engine, research/threat-matrix):** FAILED the executed check twice — but the
+  check was at fault: it grepped the literal token "bias" and opus wrote every direction-trace as
+  "optimistic/pessimistic/conservative/spurious overdrop" instead. Notable retry behavior: given the
+  exact failing token in the retry prompt, opus did NOT token-stuff — it re-verified the whole
+  artifact against repo artifacts and CORRECTED two of its own claims (pence/GBP handling verdict,
+  cheqv-as-detector). Boss re-verified substance, widened the check vocabulary, re-executed → PASS.
+  Lesson: substance-check research reports on meaning-bearing token FAMILIES, not single words;
+  opus@max treats a retry as "re-audit everything", which is the behavior you want.
+- **opus·high (claude, live-web regimes research):** attempt 1 failed the template check on
+  formatting only (bold-wrapped `**Accessed:**` labels defeat the `Accessed:\s*\d{4}` regex; no bare
+  URLs). Retry fixed format AND upgraded substance (settled Japan's ex-date convention from a TSE
+  primary source it had left Uncertain). Spec lesson: state "plain labels, not bold" when using the
+  research-with-proof template check.
+- **sonnet·high (claude, repo audit):** attempt 1 wrote report.md somewhere other than the taskdir
+  (claimed "written to the task directory"; expect_files missed it) — when a spec grants read access
+  to another repo, `./report.md` is ambiguous after the worker cd's. Spec lesson: give the ABSOLUTE
+  deliverable path. Attempt 2 clean, high-quality audit (found the stage-2 fold is dedup-only).
+- **sonnet·high (claude, lit sweep):** attempt 1 over word cap (1788>1600), trimmed on retry.
+  Contamination note: it *offered* a session log then declined it citing the single-deliverable
+  contract — the global-rules leak is real but a hard output contract in the spec contains it.
+- **k3·high (kimiclaude, strategy design):** first-try PASS, 615s. Strong structured risk review;
+  correctly refused to guess frequencies, routed them to a measure-on-panel task. Feature-probation
+  evidence continues to accumulate in k3's favor at effort high.
+- **gpt-5.6-luna·xhigh (codex, bounded research taxonomy — exploration audition one rung up from
+  proven bulk):** first-try PASS, 483s, 75,860 tokens. 70-row ISO 15022 CAEV table, correct
+  relevance mapping, and it *did* flag CAPR/REOR/EXRI naming uncertainties — but presented `DVSC`
+  and `RHTS` code names confidently where the ISO dictionary needs verifying. Grade: pass with a
+  citation-discipline caveat; taxonomy output must be validated against the vendor dictionary before
+  reliance. Research-lane status: untested → probation (1/1 first-try).
+- **Round 2 (2026-07-25, adversarial doc review of the synthesis):** k3·high — first-try PASS,
+  908s; verdict SHIP-WITH-FIXES; re-derived all five numeric instances, refuted one boss claim
+  (T8 delisting handling) by reading the consumer function the boss skipped, and found a GENUINE
+  new repo bug (ex+2 exit compounds off-P_ex returns as sequential c2c) that six round-1 lanes and
+  the other reviewer missed — boss verified it by hand. Best single review artifact the fleet has
+  produced. terra·xhigh — first-try PASS, 380s, 170k tokens; verdict DO-NOT-SHIP (same substance,
+  stricter bar); independently refuted T8, added the exact/illustrative yield-convention nuance
+  and the "every consolidation flips y" overclaim; strong precision reviewer on quantitative docs.
+  Both confirm: same-family and cross-family doc review both worked; two independent reviewers >
+  one — their overlap (T8) gave confidence, their disjoint finds (compounding bug vs convention
+  nuance) were each real.
+
+## lane-bakeoff-opus5 — 2026-07-25 (Opus 5 lane swap, Claude boss, 12 paired dispatches)
+
+The first properly-attributed Claude rows in the log. Trigger: Opus 5 shipped and Austin
+directed four lane swaps (features + architecture → opus; executor/build + gating review →
+k3). This bakeoff tested those four decisions rather than re-litigating them.
+
+**Design.** 6 tasks × 2 cells, paired — both cells start from a byte-identical seed dir,
+same spec, same hidden executed check. All cells at `--effort high` (parity, and the k3@max
+unsupervised ban forbids testing the cell we cannot use). Models pinned to `claude-opus-5` /
+`claude-sonnet-5` / `k3`, never bare aliases. `ringer.py run --baseline` first: 12/12 checks
+FAIL on undone work, including two "logically wrong solution" cases — the checks can fail.
+Review lanes graded BLIND against planted-defect answer keys (4 defects + decoys each);
+graders never saw model names.
+
+**Results.** Executed checks: 10/12 first-try PASS. Both feature cells 2/2, both executor
+cells 2/2.
+
+- **Feature (F1/F2), opus-5 vs k3:** both 2/2 first-try, so the blind code comparison
+  decided it — **opus-5 won both**. Shorter (84L vs 92L, 82L vs 105L), left a runnable
+  self-check on each task, k3 left none. k3's F2 indexes by FILE LINE not row, so a blank
+  line shifts every subsequent index — a spec deviation that survived its own passing check.
+  k3's F1 `.get("duration_ms", 0)` turns a malformed row into a silently wrong median and an
+  inflated first-try rate rather than a crash. k3's one real win: timestamp robustness
+  (mixed naive/aware, lowercase z) where opus-5 raises TypeError.
+  **The "k3 parsimony is a feature virtue" premise that held this lane since 2026-07-22 is
+  FALSIFIED — k3 wrote MORE code, not less, on both tasks.**
+- **Architecture review (A1), opus-5 vs k3: a TIE, no measured gain.** Both 4/4 planted
+  defects, both 5 legitimate extras beyond the key, both the same 1 false positive. opus-5's
+  only edge: named the retry/idempotency defect outright where k3 reached it indirectly
+  ("partial"). Cost: 167 lines vs 21, 349s vs 234s. n=1. The swap here is consolidation, not
+  an upgrade — record it as such.
+- **Gating diff review (G1), k3 vs sonnet-5: identical.** Both 4/4 planted, 5 findings each,
+  no padding, sensible severity order. Per-attempt latency k3 87s/104s vs sonnet 91s/56s —
+  within noise, both ~9× under timeout. **The gate-latency worry does not survive
+  measurement**; the 908s k3 review on record was a research-synthesis review, not a diff,
+  hence the new diff-scoping rule.
+- **Executor/build (E1/E2), k3 vs sonnet-5:** quality tie, k3 ~1.6× slower on E2 (81s vs 49s).
+
+**MEASURED: kimiclaude request burn** (recovered retroactively by counting unique assistant
+message IDs in `~/.claude-kimi-config/projects/<taskdir>/*.jsonl` — works for any past run):
+F1 3, F2 4, E1 4, E2 5 requests single-attempt; A1 and G1 8 each **because they retried**.
+Mean 4.5 on executor shapes → the 300–1200 req/5h window holds ~67 tasks at the floor,
+~267 at the ceiling. **Retries, not volume, are what blow the window.**
+
+**Contract adherence, unprompted finding:** `quality_reports/session_logs/` appeared in 4 of
+4 claude-engine code-writing taskdirs (incl. 2/2 Opus 5 feature tasks) and 0 of 6 kimiclaude
+taskdirs, against an explicit single-deliverable contract. The known claude-engine
+contamination, now measured rather than anecdotal.
+
+**Three faults in the instrument — all mine, all recorded so the numbers are not over-read:**
+1. The review-lane structural checks required location AND severity inside one top-level
+   bullet — a format never stated in the spec. This contaminated all 4 review-lane attempt
+   counts and produced the single FAIL (G1--sonnet5 reviewed fine; it failed my formatting).
+   Each contaminated retry also DOUBLED that task's Kimi request burn (8 vs 4).
+2. The A1 answer key's multi-region decoy is contestable: all four reviews independently
+   flagged it, with sound reasoning (the vendor enforcing its own cap is the failure being
+   prevented, not a safety net). Four independent reviews against one key means the KEY is
+   wrong — real false-positive count is likely zero across the board.
+3. `reasoning_effort` logged null on all 16 rows despite manifests passing `--effort high`.
+   Cause found and verified by reading the source: `effective_reasoning_effort_from_command`
+   (ringer.py:8805) regex-matches only the codex `model_reasoning_effort=` form, so the
+   Claude-harness `--effort <level>` argv form returns None. ~4-line fix; until it lands
+   every claude/kimiclaude row stays half-unattributable.
+
+**Status: all four lanes PROBATION, not proven** — n=2 per code lane, n=1 per review lane,
+below the 3-task threshold.
+
+## 2026-07-25 pm — corp-action-directions continuation (cap-handoff fleet, zero Anthropic)
+
+Context: Claude 5h cap hit mid-deep-research; 5/7 native opus/sonnet lanes harvested from the
+killed workflow's journal; remainder ran on ringer (runs corp-action-directions-contA/contB).
+All 6 tasks PASS first-try, ~20 min wall. Exploration-ladder outcomes:
+
+- **sol·xhigh on live-web research (2 lanes): untested → PASS ×2.** Both lane reports dense,
+  contract-clean, heavily verified-web-tagged with real URLs (spot-checked by luna audit +
+  terra review; no fabrications attributed to sol). Codex web recipe:
+  `-c sandbox_workspace_write.network_access=true` (+ tools.web_search=true), banner-verifiable
+  ("network access enabled"). sol is now the proven non-Anthropic fallback for the research
+  lane when Claude caps bind. n=2, promote to probation.
+- **luna·xhigh citation audit (web): untested → PASS.** 23 citations checked, 17/6/0
+  CONFIRMED/MISMATCH/fabricated; verdict lines precise; caught 6 over-bundled claims the boss
+  then enforced. A genuinely load-bearing QA cell at the cheapest codex tier. Probation.
+- **luna·xhigh consolidation (39-row table): PASS**, consistent with its bulk-lane primary role.
+- **k3·high as coverage critic (doc): untested → PASS.** Found 2 real gaps (Japan capital
+  reductions; H-share full circulation) and mapped 9 duplicate clusters + all reserved-design
+  adjacencies; arguably the highest-density report of the run. Probation for doc-critic role.
+- **terra·xhigh adversarial doc-review: PASS** (SHIP-WITH-FIXES), consistent with its G1-seat
+  history; sandbox-without-network is a clean way to ENFORCE the terra live-web ban.
+
+Ops lesson: killed native workflows are recoverable — journal.jsonl retains completed agents'
+structured results verbatim; only in-flight agents are lost. Harvest before re-running anything.

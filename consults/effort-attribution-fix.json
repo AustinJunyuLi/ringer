@@ -1,0 +1,24 @@
+{
+  "run_name": "effort-attribution-fix",
+  "workdir": "~/.ringer/work/effort-attribution-fix",
+  "max_parallel": 1,
+  "tasks": [
+    {
+      "key": "effort-regex",
+      "engine": "codex",
+      "model": "gpt-5.6-terra",
+      "task_type": "code-fix",
+      "timeout_s": 1800,
+      "engine_args": [
+        "-c",
+        "model_reasoning_effort=high",
+        "-c",
+        "sandbox_workspace_write.writable_roots=[\"/Users/austinli/fleet/swarm\"]"
+      ],
+      "expect_files": ["notes.md"],
+      "spec": "You are fixing one function in a real repository. Your current working directory is a scratch task dir -- use it only for ./notes.md. The repo you may edit is /Users/austinli/fleet/swarm.\n\nOWNERSHIP BOUNDARY: you own exactly ONE repo file: /Users/austinli/fleet/swarm/ringer.py. Do not modify, create or delete anything else in the repo. Do NOT touch tests/test_effort_attribution_acceptance.py -- that is the grading check and editing it is an automatic fail. Do not touch .git, do not commit, do not push, do not run 'git add'.\n\n=== THE DEFECT ===\n\nIn ringer.py, the function `effective_reasoning_effort_from_command(command: list[str]) -> str | None` (near line 8805) records which reasoning effort a worker actually ran at. It is called from the eval-logging path (near line 8522) and its return value is written to every row of the eval log.\n\nIt currently regex-matches ONLY the Codex argv form `model_reasoning_effort=<value>`. The other two live lanes express effort differently, so both log null:\n\n1. The claude lane passes `--effort <value>` -- TWO ADJACENT argv items, e.g. [\"--model\", \"opus\", \"--effort\", \"high\", \"-p\", \"<spec>\"]. The `--effort=<value>` single-item form must also work.\n2. The kimi lane has no effort flag at all: effort rides the MODEL ALIAS, passed as `-m <alias>`. Aliases are `k3-low`, `k3-high`, `k3-max`, optionally namespaced as `kimi-code/k3-max`, plus the legacy spelling `kimi-code/k3max` (= max).\n\nMeasured impact on the live log: codex 126 rows with effort recorded, claude 0 of 64, kimi 0 of 112. Routing doctrine treats a cell as (model x effort), so two thirds of the fleet is currently unattributable.\n\n=== WHAT TO CHANGE ===\n\nExtend `effective_reasoning_effort_from_command` to recognise all three forms. Requirements, all load-bearing:\n\n- The existing Codex behaviour must not change at all. It is regression-tested.\n- Handle `--effort <value>` (adjacent items) and `--effort=<value>` (single item).\n- Derive effort from a kimi model alias ONLY when the alias states it: `k3-low`/`k3-high`/`k3-max`, with or without a `kimi-code/` prefix, plus legacy `k3max`.\n- NEVER GUESS. A bare `k3` or `kimi-code/k3` takes whatever `default_effort` the config gives it, which this function cannot see -- it must return None rather than invent a value. A fabricated value here silently corrupts the scoreboard, which is worse than a null.\n- Do not harvest the substring 'max' out of unrelated tokens (e.g. `max_context_size=1048576` must yield None).\n- An explicit effort flag beats an alias-derived one when both appear.\n- A dangling `--effort` with no following value must return None, not crash.\n\n=== HOW TO VERIFY ===\n\nRun from the repo root, and keep going until it passes:\n\n    python3 -m unittest tests.test_effort_attribution_acceptance\n\nThat file is the grading check. It currently fails 9 of 19 on the unmodified function. Read it to understand the exact contract, but do not edit it.\n\nAlso confirm you broke nothing else:\n\n    python3 -m unittest discover -s tests -p 'test_*.py' -q\n\n=== OUTPUT CONTRACT ===\n\nMake the change in ringer.py, then write ./notes.md in your scratch dir stating: what you changed and why that shape, the exact verification commands you ran and their results, and anything you were unsure about. Keep the fix boring and local -- this is a small surgical change to one function, not a refactor. Do not add dependencies. Do not restructure surrounding code.",
+      "check": "bash -c 'cd /Users/austinli/fleet/swarm && git diff --name-only | grep -qv \"^ringer.py$\" && { echo \"FAIL: edited files outside ownership boundary:\"; git diff --name-only; exit 1; }; python3 -m unittest tests.test_effort_attribution_acceptance 2>&1 | tail -5; python3 -m unittest tests.test_effort_attribution_acceptance >/dev/null 2>&1 || { echo \"FAIL: acceptance check did not pass\"; exit 1; }; python3 -m unittest discover -s tests -p \"test_*.py\" -q >/dev/null 2>&1 || { echo \"FAIL: broke the wider suite\"; exit 1; }; echo \"PASS: effort attribution fixed on all three lanes, wider suite green\"'",
+      "verified": "effective_reasoning_effort_from_command now attributes codex, claude --effort and kimi alias forms; refuses to guess on bare k3; full repo test suite still green; only ringer.py modified."
+    }
+  ]
+}
