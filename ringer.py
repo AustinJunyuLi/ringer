@@ -9483,6 +9483,21 @@ def effective_reasoning_effort_from_command(command: list[str]) -> str | None:
         if match:
             effort = match.group(1).strip()
             return effort or None
+
+    for index, item in enumerate(command):
+        if item == "--effort":
+            if index + 1 >= len(command) or command[index + 1].startswith("-"):
+                return None
+            effort = command[index + 1].strip()
+            return effort or None
+        if item.startswith("--effort="):
+            effort = item.removeprefix("--effort=").strip()
+            return effort or None
+
+    model = effective_model_from_command(command)
+    match = re.fullmatch(r"(?:kimi-code/)?(?:k3-(low|high|max)|k3max)", model)
+    if match:
+        return match.group(1) or "max"
     return None
 
 

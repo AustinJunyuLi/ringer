@@ -98,3 +98,79 @@ lab = "Meta"
 confidence = "verified"
 source = "manifest model field; OpenRouter slug meta-llama/llama-3.3-70b-instruct:free"
 last_verified = 2026-07-10
+
+# ---------------------------------------------------------------------------
+# Local lanes (2026-07-28). Upstream ships codex/grok/opencode; this install
+# also runs the Claude Code and Kimi Code CLIs, so their identities are
+# declared here. Canonical keys are the short CLI nicknames; the long forms
+# are recorded as noncanonical so the scoreboard stops splitting one model
+# across two rows and lint catches the duplicate spelling at authoring time.
+# ---------------------------------------------------------------------------
+
+[engines.claude]
+harness = "Claude Code CLI"
+access = "OAuth plan"
+default_model_key = "sonnet"
+
+[engines.claude.models."sonnet"]
+display = "Claude Sonnet"
+lab = "Anthropic"
+confidence = "unverified"     # the alias floats over snapshots; a release lands in this row invisibly
+source = "claude --help v2.1.216 (local)"
+last_verified = 2026-07-28
+noncanonical_slugs = ["claude:claude-sonnet-5"]
+
+[engines.claude.models."opus"]
+display = "Claude Opus"
+lab = "Anthropic"
+confidence = "unverified"     # alias floats; verified headless 2026-07-21
+source = "claude --help v2.1.216 (local)"
+last_verified = 2026-07-28
+noncanonical_slugs = ["claude:claude-opus-5"]
+
+[engines.claude.models."fable"]
+display = "Claude Fable 5"
+lab = "Anthropic"
+confidence = "unverified"     # red-phone lane, user-invoked only
+source = "claude --help v2.1.216 (local)"
+last_verified = 2026-07-28
+noncanonical_slugs = ["claude:claude-fable-5"]
+
+[engines.kimi]
+harness = "Kimi Code CLI"
+access = "OAuth plan"
+default_model_key = "kimi-code/k3"
+
+# The three k3-* aliases are one trained artifact at three reasoning efforts
+# (see ~/.kimi-code/config.toml: each sets default_effort). They stay separate
+# rows on purpose — upstream's effort attribution reads Codex's -c flag only,
+# so for this lane the model field is the only place effort is observable.
+[engines.kimi.models."kimi-code/k3"]
+display = "Kimi K3"
+lab = "Moonshot AI"
+confidence = "verified"
+source = "https://www.kimi.com/code"
+last_verified = 2026-07-28
+noncanonical_slugs = ["kimi:k3"]
+
+[engines.kimi.models."k3-low"]
+display = "Kimi K3 (low)"
+lab = "Moonshot AI"
+confidence = "verified"
+source = "https://www.kimi.com/code"
+last_verified = 2026-07-28
+
+[engines.kimi.models."k3-high"]
+display = "Kimi K3 (high)"
+lab = "Moonshot AI"
+confidence = "verified"
+source = "https://www.kimi.com/code"
+last_verified = 2026-07-28
+
+[engines.kimi.models."k3-max"]
+display = "Kimi K3 (max)"
+lab = "Moonshot AI"
+confidence = "verified"
+source = "https://www.kimi.com/code"
+last_verified = 2026-07-28
+noncanonical_slugs = ["kimi:kimi-code/k3max"]
