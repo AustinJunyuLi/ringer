@@ -84,6 +84,30 @@ kimi-via-opencode for harness parity (kimi's track record is established).
   decide: push/salvage or explicitly destroy.
 - ~/.kimi-code CLI binary left installed (outside ringer's scope).
 
+## Round 2 (same day, second job): heavyweight succession — in progress
+
+Plan: quality_reports/plans/2026-08-02_round2-heavyweight-succession.md.
+Probes 3/3 (terra/luna/opus). Feature cells both PASS first-try (opus 60s,
+sol 166s; both patches satisfy the hash-guarded 8-case contract; opus's
+slightly richer, sol's regexes tighter). Main run 13/17 — the 4 fails were
+MY check bugs, confirmed by running fixed checks against the failed
+artifacts: research_check mangled markdown-escaped JSON quotes and rejected
+list-form Sources entries (all 3 research cells; sonnet's artifact passes
+fully under the fixed check); review_check wrongly failed any out-of-diff
+citation (opus's review passes: 14 locations, 13 verified quotes). Fixed
+both checks, validated against the real artifacts, re-ran the 4 cells for
+clean rows. CHECK-CRAFT LESSONS: (1) quote-grounding checks must normalize
+backslash-escapes and use a tempered regex — JSON-heavy sources break naive
+quote extraction; (2) never fail contextual out-of-diff citations in review
+checks — count them as context, floor only on in-diff.
+
+Real convergent finding from BOTH heavyweight reviews (file under round-3
+work): f21b8f0's effort attribution does not recognize the opencode kimi
+route (`--variant` unparsed; alias fallback only knows kimi-code/ spellings)
+— kimi-oc effort goes unrecorded. Sol also caught a real error in my qwen
+capability TOML: night pricing is 0.2x OF THE DISCOUNTED rate (=0.02x
+standard), not 0.2x standard.
+
 ## Open questions
 
 - ~~Salvage or destroy the two flagged old trees?~~ RESOLVED: Austin chose
@@ -91,6 +115,8 @@ kimi-via-opencode for harness parity (kimi's track record is established).
   dirty files). Both deleted 2026-08-02; the qwencode-overlay work is gone
   for good.
 - Re-audit qwen3.8 when the GA slug replaces the preview.
+- Round-3 fix list: --variant effort attribution for kimi-oc; qwen TOML
+  night-pricing correction; integrate winning doc_check patch.
 
 ## Mid-run directive (Austin, during authoring)
 

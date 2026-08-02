@@ -1,0 +1,70 @@
+# Produced from the round2-heavyweight-succession run (2026-08-02): grounded
+# capability research by research--sonnet (30 verified quotes, first-try
+# clean under the corrected check), cross-checked against the terra and
+# deepseek cells' independent reports. Saved sources in the run workdir.
+
+[model]
+key = "gpt-5.6-terra"
+display = "GPT-5.6 Terra"
+vendor = "OpenAI"
+release_date = "2026-07-09"
+snapshot = "gpt-5.6-terra"
+snapshot_note = "OpenRouter permaslug openai/gpt-5.6-terra-20260709. Mid-tier of the GPT-5.6 family — successor to the old 'mini' naming; bare gpt-5.6 alias points to Sol, not Terra."
+
+[api]
+endpoint_families = ["responses", "chat-completions", "batch"]
+auth = "OpenAI API key, or bundled into every paid ChatGPT plan via Codex (CLI/IDE/SDK). On this fleet it rides the codex engine (OAuth plan), model field gpt-5.6-terra."
+streaming = "Supported (streaming, structured_outputs, function_calling, file_search, image_input, web_search, prompt_caching)."
+
+[caching]
+supported = "true"
+mode = "explicit-write-billed"
+how_enabled = "Prompt caching supported; cache writes billed at 1.25x uncached input."
+read_pricing_per_m = 0.20
+write_pricing_per_m = 2.50
+
+[reasoning]
+params = ["reasoning.effort (none|minimal|low|medium|high|xhigh|max)", "reasoning mode standard|pro"]
+defaults = "standard mode, effort medium when unset (confirmed by OpenRouter metadata: default_reasoning_effort=medium)."
+
+[limits]
+context_window = 1050000
+max_output_tokens = 128000
+rate_limits = "Plan-side: roughly 25-200 local Codex messages per 5-hour window on Plus. Knowledge cutoff 2026-02-16; input text+image."
+
+[pricing]
+prompt_per_m = 2.00
+completion_per_m = 12.00
+cache_read_per_m = 0.20
+as_of = "2026-08-02"
+notes = "Long-context surcharge: >272K input tokens bills the WHOLE request at 2x input / 1.5x output. Codex credit accounting: 50 credits/M input, 300 credits/M output (10x Luna)."
+
+[[sources]]
+claim = "identity + limits: model page (id, tier, 1,050,000 ctx, 128,000 out, cutoff)"
+url = "https://developers.openai.com/api/docs/models/gpt-5.6-terra"
+accessed = "2026-08-02"
+quote = "GPT-5.6 Terra is designed for workloads that balance intelligence and cost."
+
+[[sources]]
+claim = "pricing row incl. cached input and cache write"
+url = "https://developers.openai.com/api/docs/pricing"
+accessed = "2026-08-02"
+quote = "| gpt-5.6-terra | $2.00 | $0.20 | $2.50 | $12.00 | $4.00 | $0.40 | $5.00 | $18.00 |"
+
+[[sources]]
+claim = "reasoning modes and default effort"
+url = "https://developers.openai.com/api/docs/guides/reasoning"
+accessed = "2026-08-02"
+quote = "If you omit `reasoning.effort`, GPT-5.6 defaults to `medium` in both modes."
+
+[[sources]]
+claim = "plan bundling + credit accounting + message windows"
+url = "https://developers.openai.com/codex/pricing"
+accessed = "2026-08-02"
+quote = "The GPT-5.6 model family, including Sol, Terra, and Luna"
+
+[[sources]]
+claim = "release-date cross-check via OpenRouter permaslug"
+url = "https://openrouter.ai/openai/gpt-5.6-terra"
+accessed = "2026-08-02"
+quote = "\"permaslug\":\"openai/gpt-5.6-terra-20260709\""

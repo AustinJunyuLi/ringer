@@ -114,6 +114,32 @@ def symbol_exists(symbol: str, files: list[Path]) -> bool:
     return False
 
 
+def strip_placeholders(symbol: str) -> str:
+    """Drop `<...>` segments and trailing `...` from a documented symbol."""
+    stripped = re.sub(r"<[^>]*>", "", symbol)
+    stripped = re.sub(r"\.\.\.\s*(?=\)|$)", "", stripped)
+    return stripped.strip()
+
+
+def symbol_matches(symbol: str, files: list[Path], relaxed: bool) -> bool:
+    if symbol_exists(symbol, files):
+        return True
+    if not relaxed:
+        return False
+    stripped = strip_placeholders(symbol)
+    if not stripped:
+        return False
+    if stripped != symbol and symbol_exists(stripped, files):
+        return True
+    call = re.match(r"([A-Za-z_][A-Za-z0-9_.]*)\s*\(", stripped)
+    if call:
+        return symbol_exists(call.group(1), files)
+    directive = re.match(r"([^\s:][^:]*:)", stripped)
+    if directive:
+        return symbol_exists(directive.group(1), files)
+    return False
+
+
 def fenced_blocks(markdown: str, language: str) -> list[str]:
     pattern = re.compile(r"```([^\n`]*)\n(.*?)\n```", re.DOTALL)
     blocks: list[str] = []
@@ -175,6 +201,18 @@ def main() -> int:
     parser.add_argument("--min-section-words", required=True)
     parser.add_argument("--symbol-section", required=True)
     parser.add_argument("--symbol-allowlist", default="NONE")
+    parser.add_argument(
+        "--symbol-mode",
+        choices=["strict", "relaxed"],
+        default="strict",
+        help=(
+            "strict (default): documented symbols must appear byte-for-byte in the "
+            "source tree. relaxed: also accept call-forms like `main(argv)` when the "
+            "base identifier exists, directive-forms like `MOCK_FILE: <path>` when the "
+            "prefix through the colon exists, and strip `<...>` / trailing `...` "
+            "placeholders before matching; invented symbols still fail."
+        ),
+    )
     parser.add_argument("--runnable-language", required=True)
     parser.add_argument("--example-runner", required=True)
     parser.add_argument("--example-cwd", required=True)
@@ -229,8 +267,9 @@ def main() -> int:
         failures = True
     else:
         files = source_files(source_root)
+        relaxed = args.symbol_mode == "relaxed"
         for symbol in symbols_to_check:
-            if not symbol_exists(symbol, files):
+            if not symbol_matches(symbol, files, relaxed):
                 print(f"FAIL: documented symbol not found in source tree: {symbol}")
                 failures = True
 

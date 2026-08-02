@@ -37,7 +37,7 @@ rate_limits = "unknown"
 prompt_per_m = "n/a"
 completion_per_m = "n/a"
 as_of = "2026-08-02"
-notes = "Not sold per-token: Token Plan subscription only (personal promo tiers Lite ¥39 / Standard ¥139 / Pro ¥499 per month; usage packs ¥100 for 20,000 Credits). During preview, Credits consumption is discounted to 1/10, and night calls (22:00-08:00 Beijing) drop to 0.2x standard on top of that."
+notes = "Not sold per-token: Token Plan subscription only (personal promo tiers Lite ¥39 / Standard ¥139 / Pro ¥499 per month; usage packs ¥100 for 20,000 Credits). During preview, Credits consumption is discounted to 1/10; night calls (22:00-08:00 Beijing) get a FURTHER 0.2x multiplier on the discounted rate — i.e. 0.02x of standard consumption at night. (Corrected 2026-08-02: an earlier revision misread the night factor as 0.2x of standard; caught by GPT-5.6 Sol in the round-2 review cell.)"
 
 [[sources]]
 claim = "identity + api: Token Plan availability, thinking-only series, interfaces"

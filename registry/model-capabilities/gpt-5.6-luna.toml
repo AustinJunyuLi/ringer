@@ -1,0 +1,64 @@
+# Produced from the round2-heavyweight-succession run (2026-08-02): grounded
+# capability research by research--sonnet (30 verified quotes), cross-checked
+# against the terra and deepseek cells' reports. Saved sources in the run
+# workdir. See also feedback memory: Luna is short-context-lane ONLY by
+# routing doctrine (MRCR cliff), regardless of the nominal 1M window.
+
+[model]
+key = "gpt-5.6-luna"
+display = "GPT-5.6 Luna"
+vendor = "OpenAI"
+release_date = "2026-07-09"
+snapshot = "gpt-5.6-luna"
+snapshot_note = "Efficiency tier of the GPT-5.6 family, positioned for high-volume/lighter-weight work."
+
+[api]
+endpoint_families = ["responses", "chat-completions", "batch"]
+auth = "OpenAI API key, or bundled into every paid ChatGPT plan via Codex. On this fleet: codex engine, model field gpt-5.6-luna."
+streaming = "Supported (same GPT-5.6 feature set as Terra)."
+
+[caching]
+supported = "true"
+mode = "explicit-write-billed"
+read_pricing_per_m = 0.02
+write_pricing_per_m = 0.25
+
+[reasoning]
+params = ["reasoning.effort (none|minimal|low|medium|high|xhigh|max)", "reasoning mode standard|pro"]
+defaults = "standard mode, effort medium when unset."
+
+[limits]
+context_window = 1050000
+max_output_tokens = 128000
+rate_limits = "Plan-side: roughly 250-2,000 local Codex messages per 5-hour window on Plus — the family's biggest allowance. Knowledge cutoff 2026-02-16."
+
+[pricing]
+prompt_per_m = 0.20
+completion_per_m = 1.20
+cache_read_per_m = 0.02
+as_of = "2026-08-02"
+notes = "Cheapest row in OpenAI's flagship table. Same >272K long-context surcharge as the family. Codex credits: 5/M input, 30/M output — 10x cheaper than Terra in plan allowance. ROUTING CAVEAT (external benchmarks, verified 2026-08-02 memory): long-context retrieval craters (MRCR ~41%) — keep Luna on short-context lanes despite the nominal window."
+
+[[sources]]
+claim = "limits: model page (1,050,000 ctx, 128,000 out, cutoff, modalities)"
+url = "https://developers.openai.com/api/docs/models/gpt-5.6-luna"
+accessed = "2026-08-02"
+quote = "Context window: 1,050,000 tokens"
+
+[[sources]]
+claim = "pricing row"
+url = "https://developers.openai.com/api/docs/pricing"
+accessed = "2026-08-02"
+quote = "| gpt-5.6-luna | $0.20 | $0.02 | $0.25 | $1.20 | $0.40 | $0.04 | $0.50 | $1.80 |"
+
+[[sources]]
+claim = "plan positioning + credit accounting + message windows"
+url = "https://developers.openai.com/codex/pricing"
+accessed = "2026-08-02"
+quote = "GPT-5.6 Luna for higher usage limits on lighter-weight or high-volume"
+
+[[sources]]
+claim = "reasoning tiers shared across GPT-5.6"
+url = "https://developers.openai.com/api/docs/guides/reasoning"
+accessed = "2026-08-02"
+quote = "Supported values are model-dependent and can include `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, and `max`."
