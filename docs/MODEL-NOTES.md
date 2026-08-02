@@ -347,3 +347,30 @@ checks and raw logs support — no vibes, no worker self-reports.
 - **gpt-5.6-luna** — the succession surprise: first-try on BOTH its cells (code-fix 85s, docs 318s), and in Codex plan credits it is 10x cheaper than Terra (5/30 vs 50/300 per M) with a 250-2,000 msg/5h allowance. Short-context lanes only (MRCR cliff stands). Luna takes Sonnet's old docs/short-fix slots on the GPT side of the plan ledger.
 - **opus·high vs sol·high** — Austin's intuition confirmed: no domination, wide interchangeable middle. All four shapes passed both models on substance. Separations: opus was FASTER everywhere (feature 60s vs 166s, hardfix 43s vs 79s, diagnosis 117s vs 156s) and its feature patch was slightly richer (dotted-name call-forms, kept EOF newline); sol was more citation-disciplined (review first-try; opus's fresh review dropped one ungroundable quote on attempt 1) and its regexes tighter/more conservative. Lean: opus for implementation-speed shapes, sol for citation-heavy review/verification; everything else interchangeable — load-split is Austin's call.
 - **Real findings from the review cells (both models, independently):** f21b8f0's effort attribution never parses --variant and its alias fallback only knows kimi-code/ spellings → kimi-for-coding/k3 effort goes UNRECORDED (HIGH, fix queued); sol additionally caught the qwen capability TOML overstating night pricing by 10x (corrected same day). The adversarial-review-of-own-commits pattern paid for the whole round.
+
+## STANDING ROUTING DOCTRINE (2026-08-02, Austin-approved after round 2)
+
+Volume floor: **deepseek/deepseek-v4-flash is the default wherever similarly
+qualified** (Austin's cost directive; ties go to deepseek). Qwen 3.8 Max
+Preview rotates heavily while the preview lasts. Kimi = opencode only.
+
+Heavyweight + plan ledger split (assign by task_type; the must-routes
+balance the two subscriptions because Claude also carries Sonnet's research
+lane and GPT carries Luna's volume lane):
+
+| Route to | task_types |
+|---|---|
+| GPT-5.6 Sol (GPT plan) | code-review / adversarial verification; constrained rewrites & docs-at-scale; site-build |
+| Claude Opus (Claude plan) | code-feature; hard code-fix; diagnosis post-mortems |
+| GPT-5.6 Luna (GPT plan) | docs + short-context light fixes ONLY (MRCR cliff; 10x cheaper plan credits than Terra) |
+| Claude Sonnet (Claude plan) | research ONLY (+ break-glass); minimized per Austin; unplug decision after round-3 confirm |
+| benched | GPT-5.6 Terra (no lane where it beat both Sonnet and the cheap lanes) |
+
+Operating rules: (1) new/unclassified heavyweight task → Opus if
+latency/implementation-shaped, Sol if verification/citation-shaped, else
+whichever plan the last heavyweight batch didn't use; (2) assignments are
+sticky — reassign a type only on the demotion trigger (repeated
+first-attempt failures) or a visible plan crunch, and move ONE type at a
+time; (3) round-2 separations are n=1-2 — treat as provisional until
+production runs confirm via the promotion ladder. Never route research to
+Sol (59-61% FT at ~230k median tokens, the fleet's worst research value).

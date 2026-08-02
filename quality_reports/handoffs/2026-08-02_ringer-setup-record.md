@@ -21,20 +21,21 @@ with your own probes.
 
 ## 1. What this install is
 
-- Ringer lives at `~/fleet/swarm`, cloned from upstream
-  `https://github.com/NateBJones-Projects/ringer` (remote `origin`).
-  Personal fork `https://github.com/AustinJunyuLi/ringer` (remote `fork`)
-  exists but its `main` is a stale pre-reset archive — do NOT clone the fork
-  expecting current state.
-- Upstream tip used here: `a1a91b8` ("Fix the shutdown-test flake", 2026-07-28).
-- Local `main` = `f21b8f0`, ONE commit ahead of upstream, **not pushed
-  anywhere**: it adds reasoning-effort attribution for the claude/kimi CLI
-  flags to `ringer.py` plus local registry blocks. The full patch is
-  **Appendix A** — apply it (`git am`) on top of upstream.
-- On top of that sit uncommitted registry edits from today's model audition
-  (**Appendix B**, apply with `git apply`) and two new untracked capability
-  files (**Appendices C and D**, create verbatim).
-- `[update] auto = false` on purpose: the local commit means ff-only updates
+- Ringer lives at `~/fleet/swarm`. **UPDATED (later on 2026-08-02): clone
+  the FORK** — `https://github.com/AustinJunyuLi/ringer`, branch `main` —
+  which now mirrors this machine exactly (through commit `4e62d95`). Keep
+  upstream `https://github.com/NateBJones-Projects/ringer` as remote
+  `origin` for deliberate rebases; the pre-reset archive is preserved as
+  tag `archive/pre-reset-2026-07-28` on the fork.
+- Local commits on top of upstream `a1a91b8`, ALL pushed to the fork:
+  `f21b8f0` (effort attribution + registry engine blocks), `75412e5`
+  (opencode model rows, kimi retirement, deepseek/qwen capability TOMLs),
+  `7a7b4bd` (quality_reports records incl. this document), `4e62d95`
+  (round-2: doc_check `--symbol-mode relaxed`, terra/luna capability
+  TOMLs, MODEL-NOTES doctrine).
+- **Appendices A–D below are now redundant with fork history** — retained
+  only as an offline audit copy in case the fork is unreachable.
+- `[update] auto = false` on purpose: local commits mean ff-only updates
   can never apply. Pull upstream deliberately: `git fetch origin && git
   rebase origin/main`.
 
@@ -202,6 +203,32 @@ deepseek took code-fix and data-pipeline first-try (fastest in row), needed
 one retry on research and docs; qwen went 4/4 first-try; kimi-oc matched or
 beat kimi-CLI everywhere. Treat that as PRIOR, not as your machine's truth —
 run your own audition or probes.
+
+### 3a. Heavyweight + succession doctrine (added after round 2, 2026-08-02)
+
+A second bakeoff (run `round2-heavyweight-succession`, 22 cells; full
+evidence in `docs/MODEL-NOTES.md` "Round 2" + "STANDING ROUTING DOCTRINE"
+sections in the repo) settled the plan-billed lanes. Austin-approved
+assignments, replicate as doctrine:
+
+| Route to | task_types |
+|---|---|
+| GPT-5.6 Sol (codex engine, `-c model_reasoning_effort=high` for heavy work) | code-review / adversarial verification; constrained rewrites & docs-at-scale; site-build |
+| Claude Opus (claude engine, `--effort high`) | code-feature; hard code-fix; diagnosis post-mortems |
+| GPT-5.6 Luna (codex engine) | docs + short-context light fixes ONLY — long-context retrieval craters (MRCR ~41%) despite the nominal 1M window; 10x cheaper plan credits than Terra |
+| Claude Sonnet | research ONLY + break-glass (minimized by directive; hard unplug pending a confirming round) |
+| benched | GPT-5.6 Terra |
+
+Operating rules: new heavyweight type → Opus if implementation/latency-
+shaped, Sol if verification/citation-shaped, else the plan the last batch
+didn't use; assignments sticky until the demotion trigger; never route
+research to Sol. Rationale: the ledgers balance because the Claude plan
+also carries Sonnet-research and the GPT plan carries Luna-volume.
+
+KNOWN GAP (fix pending, found by BOTH round-2 review cells): ringer's
+effort attribution does not parse opencode's `--variant`, so effort on
+`kimi-for-coding/k3` rows is currently unrecorded — read those scoreboard
+rows accordingly until the fix lands in the fork.
 
 ## 4. OpenCode lane — the wiring facts that bit us
 
