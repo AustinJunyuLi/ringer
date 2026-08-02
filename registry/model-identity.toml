@@ -135,7 +135,7 @@ last_verified = 2026-07-10
 [engines.claude]
 harness = "Claude Code CLI"
 access = "OAuth plan"
-default_model_key = "sonnet"
+default_model_key = "opus"   # flipped 2026-08-02 with the standing doctrine: sonnet = research-only
 
 [engines.claude.models."sonnet"]
 display = "Claude Sonnet"

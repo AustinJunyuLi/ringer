@@ -75,13 +75,12 @@ dashboard_port_base = 8787
 allow_full_access = false
 
 [update]
-# origin points at upstream (NateBJones-Projects/ringer) as of 2026-07-28; the
-# personal fork is the `fork` remote and carries the pre-reset archive tag.
-# auto stays off for a different reason now: main sits one local commit ahead
-# of upstream (effort attribution + the claude/kimi registry blocks), so an
-# ff-only move can never apply and an automatic check would only ever report
-# a refusal. Pull upstream deliberately instead:
-#   git fetch origin && git rebase origin/main
+# origin = upstream (NateBJones-Projects/ringer); fork = AustinJunyuLi/ringer,
+# which since 2026-08-02 MIRRORS local main (all local commits pushed after
+# each session) and also carries the pre-reset archive tag. auto stays off
+# because main carries local commits on top of upstream, so an ff-only move
+# can never apply. Pull upstream deliberately instead:
+#   git fetch origin && git rebase origin/main   (then push fork main)
 auto = false
 
 # Model steering. profiles/ starts empty by design: rules arrive from observed
@@ -113,9 +112,12 @@ model_report_regex = "(?m)^model:[ \\t]*([^ \\t\\r\\n]+)[ \\t]*\\r?$"
 # claude — sonnet/opus/fable. Uses {model} + explicit --model ({model_args}
 # would emit "-m", which is not a --model short flag). Effort via engine_args
 # ["--effort","low|high|max"]. Headless -p needs skip-permissions to write.
+# model_default = opus per the 2026-08-02 standing doctrine: Sonnet is
+# research-only + break-glass (name it explicitly in manifests); an untyped
+# claude task should not silently land on Sonnet.
 [engines.claude]
 bin = '/Users/austinli/.local/bin/claude'
-model_default = "sonnet"
+model_default = "opus"
 args_template = ["{access_args}", "--model", "{model}", "{engine_args}", "-p", "{spec}"]
 sandbox_args = ["--dangerously-skip-permissions"]
 full_access_args = []
@@ -284,10 +286,11 @@ zero-cost exploration slots.)
   evidence with the dead harness; (2) `claude:sonnet` is the canonical
   claude route (lint rejects `claude-sonnet-5`; the noncanonical map
   covers it).
-- `registry/model-capabilities/`: Appendices C and D are grounded
-  capability files for the two new models (every claim quote-verified
-  against saved primary sources during the audition). Drop them in
-  verbatim.
+- `registry/model-capabilities/`: four grounded capability files ship in
+  the fork (deepseek-v4-flash, qwen3.8-max-preview, gpt-5.6-terra,
+  gpt-5.6-luna — every claim quote-verified against saved primary sources
+  during the two audition rounds). Appendices C and D are audit copies of
+  the first two.
 
 ## 7. How this machine validated the lanes (repeat the pattern, not the data)
 
@@ -303,7 +306,7 @@ zero-cost exploration slots.)
 
 ---
 
-## Appendix A — local commit `f21b8f0` (apply with `git am` on upstream)
+## Appendix A — local commit `f21b8f0` (HISTORICAL AUDIT COPY — already in fork main; do not apply when cloning the fork)
 
 ```patch
 From f21b8f00437a6da3360a2b86d39dea2ee84163fa Mon Sep 17 00:00:00 2001
@@ -561,7 +564,7 @@ index 0000000..e1cc773
 2.50.1 (Apple Git-155)
 ```
 
-## Appendix B — today's uncommitted registry diff (apply with `git apply`)
+## Appendix B — the 2026-08-02 registry diff (HISTORICAL AUDIT COPY — committed as `75412e5`, already in fork main)
 
 ```diff
 diff --git a/registry/model-identity.toml b/registry/model-identity.toml
