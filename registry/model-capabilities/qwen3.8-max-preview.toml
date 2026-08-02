@@ -1,0 +1,76 @@
+# Produced from the opencode-model-audition run (2026-08-02): grounded
+# capability research by the research--deepseek cell (18 verified quotes,
+# several from Chinese-language Alibaba docs), cross-validated against the
+# research--qwen cell's independent report. Saved page excerpts live in the
+# run workdir under research--deepseek/sources/.
+
+[model]
+key = "alibaba-token-plan-cn/qwen3.8-max-preview"
+display = "Qwen 3.8 Max Preview"
+vendor = "Alibaba"
+release_date = "2026-07-19"
+snapshot = "preview"
+snapshot_note = "PREVIEW: Alibaba states capabilities will keep iterating during preview, and the model will be TAKEN OFFLINE or replaced by a GA version when preview ends. Treat scoreboard evidence as provisional and expect the slug to disappear."
+
+[api]
+endpoint_families = ["chat-completions", "anthropic-messages", "dashscope"]
+auth = "Alibaba Cloud Model Studio Token Plan subscription (Credits-based); OpenCode provider alibaba-token-plan-cn. Compatible-mode base URL pattern: https://[{WorkspaceId}].cn-beijing.maas.aliyuncs.com/compatible-mode/v1. Token Plan is restricted to the Beijing (华北2) region."
+streaming = "unknown"
+
+[caching]
+supported = "unknown"
+mode = "unknown"
+
+[reasoning]
+params = ["reasoning_content (always returned)"]
+defaults = "Thinking-ONLY: the model always reasons before replying and thinking cannot be switched off. Reasoning arrives in reasoning_content, the answer in content."
+quirks = [
+  "Classed by Alibaba as a reasoning + vision-understanding + text-generation model.",
+]
+
+[limits]
+context_window = 1000000
+max_output_tokens = 131072
+rate_limits = "unknown"
+
+[pricing]
+prompt_per_m = "n/a"
+completion_per_m = "n/a"
+as_of = "2026-08-02"
+notes = "Not sold per-token: Token Plan subscription only (personal promo tiers Lite ¥39 / Standard ¥139 / Pro ¥499 per month; usage packs ¥100 for 20,000 Credits). During preview, Credits consumption is discounted to 1/10, and night calls (22:00-08:00 Beijing) drop to 0.2x standard on top of that."
+
+[[sources]]
+claim = "identity + api: Token Plan availability, thinking-only series, interfaces"
+url = "https://help.aliyun.com/zh/model-studio/models"
+accessed = "2026-08-02"
+quote = "qwen3.8-max-preview 目前仅面向 Token Plan 订阅用户提供"
+
+[[sources]]
+claim = "identity: preview status; model retired or replaced after preview"
+url = "https://help.aliyun.com/zh/model-studio/token-plan-overview"
+accessed = "2026-08-02"
+quote = "预览结束后该模型会下线或替换成正式版本"
+
+[[sources]]
+claim = "reasoning: thinking-only, reasoning_content field"
+url = "https://help.aliyun.com/zh/model-studio/deep-thinking"
+accessed = "2026-08-02"
+quote = "仅思考模式：模型始终在回复前进行思考，无法关闭。"
+
+[[sources]]
+claim = "pricing: personal Token Plan tiers and usage packs"
+url = "https://help.aliyun.com/zh/model-studio/token-plan-personal-overview"
+accessed = "2026-08-02"
+quote = "原价 60 元/月 限时 39 元/月"
+
+[[sources]]
+claim = "pricing: 1/10 preview Credits discount and 0.2x night window"
+url = "https://help.aliyun.com/zh/model-studio/token-plan-overview"
+accessed = "2026-08-02"
+quote = "每晚 22:00 - 次日 08:00 期间调用模型，Credits 消耗再享 2 折"
+
+[[sources]]
+claim = "limits cross-check: context 1,000,000 / output 131,072, closed weights"
+url = "https://models.dev/models/alibaba/qwen3.8-max-preview"
+accessed = "2026-08-02"
+quote = "Output limit: 131,072"

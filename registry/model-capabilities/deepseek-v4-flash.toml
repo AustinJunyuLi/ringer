@@ -1,0 +1,75 @@
+# Produced from the opencode-model-audition run (2026-08-02): grounded
+# capability research by the research--deepseek cell (29 verified quotes),
+# cross-validated against the research--qwen cell's independent report and
+# the orchestrator's own doc fetches. Saved page excerpts live in the run
+# workdir under research--deepseek/sources/.
+
+[model]
+key = "deepseek/deepseek-v4-flash"
+display = "DeepSeek V4 Flash"
+vendor = "DeepSeek"
+release_date = "2026-04-24"
+snapshot = "DeepSeek-V4-Flash-0731"
+snapshot_note = "The API id is a floating alias: 'deepseek-v4-flash' always serves the newest snapshot (currently DeepSeek-V4-Flash-0731). There is no documented way to pin an old snapshot."
+
+[api]
+endpoint_families = ["chat-completions", "anthropic-messages"]
+auth = "API key (Bearer) against https://api.deepseek.com (OpenAI format) or https://api.deepseek.com/anthropic (Anthropic format). OpenCode uses the deepseek provider with the same key."
+streaming = "OpenAI-compatible chat completions; standard streaming."
+
+[caching]
+supported = true
+mode = "implicit"
+how_enabled = "Automatic context caching; cache hits billed at $0.0028/M input."
+ttl = "unknown"
+read_pricing_per_m = 0.0028
+write_pricing_per_m = "unknown"
+
+[reasoning]
+params = ["thinking (default on)", "non-thinking mode"]
+defaults = "Thinking mode enabled by default, default effort 'high'. Supports switching to non-thinking mode."
+quirks = [
+  "Thinking mode does not support temperature, top_p, presence_penalty, or frequency_penalty.",
+]
+
+[limits]
+context_window = 1000000
+max_output_tokens = 384000
+rate_limits = "Concurrency limit 2500 for deepseek-v4-flash (vs 500 for v4-pro)."
+
+[pricing]
+prompt_per_m = 0.14
+completion_per_m = 0.28
+cache_read_per_m = 0.0028
+as_of = "2026-08-02"
+notes = "Peak/off-peak policy announced but not yet in force: 2x prices during Beijing 9:00-12:00 and 14:00-18:00, all billing items, implementation date pending."
+
+[[sources]]
+claim = "identity: alias -> DeepSeek-V4-Flash-0731 snapshot"
+url = "https://api-docs.deepseek.com/"
+accessed = "2026-08-02"
+quote = "The `deepseek-v4-flash` model has been updated to DeepSeek-V4-Flash-0731. The calling method remains unchanged"
+
+[[sources]]
+claim = "limits + pricing: context 1M, max output 384K, $0.0028/$0.14/$0.28, concurrency 2500, peak policy"
+url = "https://api-docs.deepseek.com/quick_start/pricing"
+accessed = "2026-08-02"
+quote = "During peak hours, prices will be 2x the regular prices, applicable to all billing items."
+
+[[sources]]
+claim = "reasoning: thinking default with effort high; sampler params unsupported in thinking"
+url = "https://api-docs.deepseek.com/guides/thinking_mode"
+accessed = "2026-08-02"
+quote = "Thinking mode is enabled by default, with the default effort being `high`"
+
+[[sources]]
+claim = "api: max_tokens bounded by context length"
+url = "https://api-docs.deepseek.com/api/create-chat-completion"
+accessed = "2026-08-02"
+quote = "The total length of input tokens and generated tokens is limited by the model's context length."
+
+[[sources]]
+claim = "cross-check: release date, open weights, 1,000,000 / 384,000 limits"
+url = "https://models.dev/models/deepseek/deepseek-v4-flash"
+accessed = "2026-08-02"
+quote = "Context: 1,000,000"

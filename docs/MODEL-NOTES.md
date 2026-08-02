@@ -319,3 +319,20 @@ checks and raw logs support — no vibes, no worker self-reports.
 ## Process lessons (2026-07-28, PR #82 review)
 - **Ideas worth keeping from a rejected PR.** PR #82's pre-call gateway was dropped (needs your own API key, so it converts flat-rate OAuth plans into metered API billing; incompatible with Claude Code; and it saves tokens by stripping the tool list, which is the thing that makes the CLI worth using). One idea inside it is worth remembering if the problem ever comes back: an *explicitly blessed* answer cache — key a reviewed answer to the exact request plus the exact selected source packet, and replay it with zero upstream calls, never auto-accepting a model answer. It only fires on byte-identical repeats, which is why it didn't justify 2,000 lines here.
 - **Doc-stated support floors need a CI job or they are fiction.** README promised Python 3.11+ while CI only ever ran 3.12; a 3.12-only f-string reached review with a fully green suite. Either test the floor or move it.
+
+## deepseek (via opencode)
+
+- 2026-08-02 — deepseek-v4-flash, audition run `opencode-model-audition` (probe + 4 cells): probe, code-fix, and data-pipeline all first-try PASS and fastest-in-row (18s/25s cells, 12–14k tokens). docs passed on retry — attempt-1 fail was the doc_check literal-symbol trap that also caught both kimi lanes (check design, not model laziness). research passed on retry: attempt 1 failed verbatim-quote grounding on 5 sources, retry with injected failure output fixed everything (29+18 verified quotes, 203k tokens total, ~450s). The flash-class long-harness canary held: it recovered rather than choked. Entire deepseek side of the run cost well under $0.10. Routing per Austin's 2026-08-02 directive: default lane where similarly qualified — code-fix and data-pipeline immediately; research/docs credible at one retry.
+
+## qwen (via opencode)
+
+- 2026-08-02 — qwen3.8-max-preview, same run: 4/4 FIRST-TRY — the only first-try research pass in the row (107k tokens) and the only lane in the entire run to dodge the docs symbol trap by following the literal-match instruction exactly. Strongest single-round showing of the audition. Caveats: PREVIEW (Alibaba will retire or replace the slug after preview — capability file documents this), thinking-only, Token Plan (Beijing region, credits). Keep it in rotation while the preview lasts; re-audit at GA.
+
+## kimi — harness parity, CLI vs OpenCode (2026-08-02)
+
+- 2026-08-02 (later same day) — Austin HARD-RETIRED the native kimi CLI engine on this verdict. The engine block is gone from ringer config; registry entries remain for historical attribution; kimi routes exclusively through opencode (`kimi-for-coding/k3`, effort via `--variant`). Post-retirement `./ringer.py demo` green.
+- Verdict on 3 shared scenarios: **opencode-kimi ≥ native CLI**. data-pipeline: both first-try. docs: both one retry (same check trap). research: native CLI FAILED both attempts — it quoted its own reformatted markdown tables instead of verbatim source text — while opencode-kimi passed the identical spec (opencode's fetches returned cleaner text to quote verbatim). Bonus: the opencode lane records token counts and runs under Seatbelt; the native CLI does neither. Recommendation: route kimi work through opencode going forward; retire the native engine block only after another confirming run or two (Austin's call — native still holds the proven research history, 74% FT over 23 tasks).
+
+## Check-design lesson (2026-08-02, opencode-model-audition)
+
+- doc_check.py's symbol validation demands byte-literal presence in source; combined with a spec saying "wrap every function you name in backticks", natural doc phrasings (`main(argv)`, `MOCK_FILE: <path>`) fail. Three of four docs lanes burned a retry on this exact trap. Next docs manifest: either seed the spec with the literal-match rule AND an example, or pass a --symbol-allowlist for signature-style phrasings. Retry-with-injected-failure absorbed it every time, so pass_rate survived — but first-try stats for docs undercount the models.
